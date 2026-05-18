@@ -1,0 +1,60 @@
+{
+  "genre_id": "generic",
+  "genre_name": "通用故事",
+  "description": "适用于大多数剧情类故事的基础通用类型。",
+  "base_dimensions": [
+    "plot_progress",
+    "conflict_strength",
+    "character_depth",
+    "emotional_curve",
+    "pacing",
+    "dialogue_quality",
+    "chapter_hook",
+    "readability",
+    "style_consistency"
+  ],
+  "genre_dimensions": [],
+  "story_drivers": [
+    "goal",
+    "conflict",
+    "choice",
+    "change",
+    "consequence"
+  ],
+  "tension_axes": [
+    "external_obstacle",
+    "relationship_tension",
+    "inner_conflict",
+    "stakes",
+    "uncertainty"
+  ],
+  "default_arc_structure": [
+    "setup",
+    "development",
+    "crisis",
+    "climax",
+    "resolution"
+  ],
+  "quality_weights": {
+    "plot_progress": 0.18,
+    "conflict_strength": 0.15,
+    "character_depth": 0.15,
+    "emotional_curve": 0.12,
+    "pacing": 0.12,
+    "dialogue_quality": 0.08,
+    "chapter_hook": 0.08,
+    "readability": 0.07,
+    "style_consistency": 0.05
+  },
+  "quality_weights_override": {},
+  "thread_policy": {
+    "max_open_threads": 8,
+    "max_new_threads_per_chapter": 2,
+    "stale_chapter_threshold": 2
+  },
+  "forbidden_patterns": [
+    "突然出现毫无铺垫的解决方案",
+    "关键角色性格突变无合理理由",
+    "用大量说明替代情节展示"
+  ]
+}

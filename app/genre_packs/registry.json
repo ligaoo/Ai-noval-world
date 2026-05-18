@@ -1,0 +1,15 @@
+{
+  "registered_genres": [
+    {
+      "genre_id": "generic",
+      "enabled": true,
+      "path": "generic"
+    },
+    {
+      "genre_id": "horror",
+      "enabled": true,
+      "path": "horror"
+    }
+  ],
+  "default_genre": "horror"
+}

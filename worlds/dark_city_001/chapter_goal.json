@@ -1,0 +1,9 @@
+{
+  "goal": "让主角意识到旧医院并非真正废弃",
+  "pov": "char_linzho",
+  "start_time": "day1_20:00",
+  "target_progress": 100,
+  "tick_limit": 20,
+  "no_progress_limit": 4
+}
+

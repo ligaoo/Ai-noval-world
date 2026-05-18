@@ -1,0 +1,84 @@
+{
+  "genre_id": "horror",
+  "extends": "generic",
+  "genre_name": "恐怖灵异",
+  "description": "以未知威胁、异常现象、灵异规则和心理恐惧为核心驱动力的故事类型。",
+  "base_dimensions": [
+    "plot_progress",
+    "conflict_strength",
+    "character_depth",
+    "emotional_curve",
+    "suspense",
+    "pacing",
+    "dialogue_quality",
+    "chapter_hook",
+    "readability",
+    "style_consistency"
+  ],
+  "story_drivers": [
+    "suspense",
+    "fear",
+    "mystery",
+    "survival",
+    "truth_reveal",
+    "taboo_violation"
+  ],
+  "tension_axes": [
+    "unknown_threat",
+    "environment_pressure",
+    "psychological_fear",
+    "supernatural_rule",
+    "truth_reveal",
+    "isolation"
+  ],
+  "genre_dimensions": [
+    "horror_atmosphere",
+    "uncanny_effect",
+    "fear_escalation",
+    "supernatural_rule_consistency",
+    "taboo_pressure",
+    "unknown_threat_strength"
+  ],
+  "default_arc_structure": [
+    "setup",
+    "development",
+    "crisis",
+    "climax",
+    "resolution"
+  ],
+  "quality_weights": {
+    "suspense": 0.16,
+    "horror_atmosphere": 0.16,
+    "uncanny_effect": 0.12,
+    "plot_progress": 0.12,
+    "character_depth": 0.10,
+    "pacing": 0.10,
+    "supernatural_rule_consistency": 0.10,
+    "chapter_hook": 0.08,
+    "readability": 0.06
+  },
+  "quality_weights_override": {
+    "suspense": 0.18,
+    "horror_atmosphere": 0.18,
+    "uncanny_effect": 0.14,
+    "fear_escalation": 0.12,
+    "supernatural_rule_consistency": 0.12,
+    "unknown_threat_strength": 0.08,
+    "taboo_pressure": 0.08,
+    "plot_progress": 0.10
+  },
+  "thread_policy": {
+    "max_open_threads": 10,
+    "max_new_threads_per_chapter": 2,
+    "stale_chapter_threshold": 2
+  },
+  "forbidden_patterns": [
+    "过早解释灵异规则",
+    "无铺垫出现鬼怪正面攻击",
+    "用大段说明替代恐惧体验",
+    "突然转为热血打怪",
+    "主角用嘴炮解释所有真相",
+    "恐怖来源过早具象化",
+    "鬼怪能力没有边界"
+  ]
+}

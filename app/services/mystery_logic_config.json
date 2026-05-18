@@ -1,0 +1,10 @@
+{
+  "mystery_logic": {
+    "enabled": true,
+    "max_active_red_herrings": 3,
+    "require_evidence_before_major_reveal": true,
+    "forbid_final_truth_without_prior_evidence": true,
+    "red_herring_clear_required": true,
+    "deduction_fairness_check_enabled": true
+  }
+}
