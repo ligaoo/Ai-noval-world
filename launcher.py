@@ -5,8 +5,16 @@ Novel Simulator V5.2 - 一键启动脚本
 启动后端 API 服务器和前端开发服务器
 """
 
+import io
 import os
 import sys
+
+# Windows 编码修复：强制使用 UTF-8
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
 import time
 import signal
 import subprocess
@@ -38,17 +46,17 @@ def check_dependencies():
     print(f"{Colors.OKCYAN}[1/4] 检查 Python 环境...{Colors.ENDC}")
     try:
         result = subprocess.run([sys.executable, "--version"], capture_output=True, text=True)
-        print(f"    {Colors.OKGREEN}✓ Python 已安装: {result.stdout.strip()}{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}[OK] Python 已安装: {result.stdout.strip()}{Colors.ENDC}")
     except:
-        print(f"    {Colors.FAIL}✗ Python 未找到，请先安装 Python 3.10+{Colors.ENDC}")
+        print(f"    {Colors.FAIL}[FAIL] Python 未找到，请先安装 Python 3.10+{Colors.ENDC}")
         sys.exit(1)
 
     print(f"{Colors.OKCYAN}[2/4] 检查 Node.js 环境...{Colors.ENDC}")
     try:
         result = subprocess.run(["node", "--version"], capture_output=True, text=True)
-        print(f"    {Colors.OKGREEN}✓ Node.js 已安装: {result.stdout.strip()}{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}[OK] Node.js 已安装: {result.stdout.strip()}{Colors.ENDC}")
     except:
-        print(f"    {Colors.FAIL}✗ Node.js 未找到，请先安装 Node.js 16+{Colors.ENDC}")
+        print(f"    {Colors.FAIL}[FAIL] Node.js 未找到，请先安装 Node.js 16+{Colors.ENDC}")
         sys.exit(1)
 
     print(f"{Colors.OKCYAN}[3/4] 检查/安装 Python 依赖...{Colors.ENDC}")
@@ -56,19 +64,19 @@ def check_dependencies():
     if requirements_file.exists():
         subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "-q"],
                       capture_output=True)
-        print(f"    {Colors.OKGREEN}✓ Python 依赖已就绪{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}[OK] Python 依赖已就绪{Colors.ENDC}")
     else:
-        print(f"    {Colors.WARNING}⚠ requirements.txt 未找到，跳过依赖安装{Colors.ENDC}")
+        print(f"    {Colors.WARNING}[!] requirements.txt 未找到，跳过依赖安装{Colors.ENDC}")
 
     print(f"{Colors.OKCYAN}[4/4] 检查/安装前端依赖...{Colors.ENDC}")
     web_dir = PROJECT_ROOT / "web"
     node_modules = web_dir / "node_modules"
     if node_modules.exists():
-        print(f"    {Colors.OKGREEN}✓ node_modules 已存在{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}[OK] node_modules 已存在{Colors.ENDC}")
     else:
         print(f"    {Colors.WARNING}正在安装 npm 包...{Colors.ENDC}")
         subprocess.run(["npm", "install"], cwd=web_dir, capture_output=True)
-        print(f"    {Colors.OKGREEN}✓ 前端依赖安装完成{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}[OK] 前端依赖安装完成{Colors.ENDC}")
 
 def start_backend():
     """启动后端 API"""
@@ -142,19 +150,19 @@ def main():
         time.sleep(3)
         frontend_process = start_frontend()
 
-        print(f"\n{Colors.OKGREEN}✓ 后端 API 服务器: 端口 8421{Colors.ENDC}")
-        print(f"{Colors.OKGREEN}✓ 前端开发服务器: 端口 4242{Colors.ENDC}")
+        print(f"\n{Colors.OKGREEN}[OK] 后端 API 服务器: 端口 8421{Colors.ENDC}")
+        print(f"{Colors.OKGREEN}[OK] 前端开发服务器: 端口 4242{Colors.ENDC}")
 
         print(f"\n{Colors.HEADER}═══════════════════════════════════════════════════════════════{Colors.ENDC}")
-        print(f"\n{Colors.BOLD}📋 服务状态:{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}[服务状态]{Colors.ENDC}")
         print(f"   {Colors.OKCYAN}- 后端 API: {Colors.OKGREEN}运行中 {Colors.OKCYAN}(端口 8421){Colors.ENDC}")
         print(f"   {Colors.OKCYAN}- 前端 Web:  {Colors.OKGREEN}启动中    {Colors.OKCYAN}(端口 4242){Colors.ENDC}")
 
-        print(f"\n{Colors.BOLD}🔗 访问地址:{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}[访问地址]{Colors.ENDC}")
         print(f"   {Colors.OKCYAN}- 前端界面: {Colors.UNDERLINE}http://localhost:4242{Colors.ENDC}")
         print(f"   {Colors.OKCYAN}- API 文档:   {Colors.UNDERLINE}http://localhost:8421/docs{Colors.ENDC}")
 
-        print(f"\n{Colors.WARNING}💡 提示:{Colors.ENDC}")
+        print(f"\n{Colors.WARNING}[提示]{Colors.ENDC}")
         print(f"   {Colors.WARNING}- 前端启动可能需要 5-10 秒，请耐心等待{Colors.ENDC}")
         print(f"   {Colors.WARNING}- 按 Ctrl+C 停止所有服务{Colors.ENDC}")
 

@@ -212,7 +212,9 @@ class ChapterContinuityService:
         """保存章节摘要到文件"""
         summary_file = self.output_dir / f"{summary.chapter_id}_summary.json"
         with open(summary_file, "w", encoding="utf-8") as f:
-            f.write(summary.model_dump_json(indent=2, ensure_ascii=False))
+            # Pydantic V2 model_dump_json 不支持 ensure_ascii，使用 json.dumps
+            data = summary.model_dump()
+            f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
     def load_previous_chapter_context(self, sim_dir: Path) -> Optional[ChapterContext]:
         """从之前的模拟目录加载章节上下文"""

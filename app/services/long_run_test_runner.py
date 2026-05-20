@@ -282,31 +282,192 @@ class FullNovelConsistencyChecker:
     def _check_character_names(self, chapters: List[Dict], characters: Dict) -> List[Dict]:
         """检查角色名字一致性"""
         issues = []
-        # 简化实现
+        valid_ids = set(characters.keys())
+        valid_names = {
+            str(v.get("name", "")).strip()
+            for v in characters.values()
+            if isinstance(v, dict) and v.get("name")
+        }
+
+        for idx, chapter in enumerate(chapters, start=1):
+            chapter_no = chapter.get("chapter_no", idx)
+            present = chapter.get("characters_present", []) or []
+            for cid in present:
+                if cid not in valid_ids:
+                    issues.append({
+                        "type": "unknown_character_id",
+                        "chapter_no": chapter_no,
+                        "severity": "high",
+                        "message": f"章节 {chapter_no} 出现未注册角色ID: {cid}",
+                    })
+
+            aliases = chapter.get("character_names_used", []) or []
+            for name in aliases:
+                if valid_names and name not in valid_names:
+                    issues.append({
+                        "type": "unknown_character_name",
+                        "chapter_no": chapter_no,
+                        "severity": "medium",
+                        "message": f"章节 {chapter_no} 出现未注册角色名: {name}",
+                    })
         return issues
 
     def _check_location_states(self, chapters: List[Dict], locations: Dict) -> List[Dict]:
         """检查地点状态一致性"""
         issues = []
-        # 简化实现
+        valid_location_ids = set(locations.keys())
+        known_state = {}
+
+        for idx, chapter in enumerate(chapters, start=1):
+            chapter_no = chapter.get("chapter_no", idx)
+            location_changes = chapter.get("location_state_changes", {}) or {}
+            for loc_id, state_patch in location_changes.items():
+                if loc_id not in valid_location_ids:
+                    issues.append({
+                        "type": "unknown_location",
+                        "chapter_no": chapter_no,
+                        "severity": "high",
+                        "message": f"章节 {chapter_no} 修改了未注册地点: {loc_id}",
+                    })
+                    continue
+
+                if not isinstance(state_patch, dict):
+                    issues.append({
+                        "type": "invalid_location_state_patch",
+                        "chapter_no": chapter_no,
+                        "severity": "medium",
+                        "message": f"章节 {chapter_no} 的地点状态变更格式非法: {loc_id}",
+                    })
+                    continue
+
+                previous = known_state.get(loc_id, {})
+                if previous.get("destroyed") is True and state_patch.get("destroyed") is False:
+                    issues.append({
+                        "type": "location_state_regression",
+                        "chapter_no": chapter_no,
+                        "severity": "high",
+                        "message": f"章节 {chapter_no} 将已摧毁地点 {loc_id} 回滚为未摧毁",
+                    })
+                merged = dict(previous)
+                merged.update(state_patch)
+                known_state[loc_id] = merged
+
+            active_locations = chapter.get("locations_present", []) or []
+            for loc_id in active_locations:
+                if loc_id not in valid_location_ids:
+                    issues.append({
+                        "type": "unknown_location_presence",
+                        "chapter_no": chapter_no,
+                        "severity": "medium",
+                        "message": f"章节 {chapter_no} 出现未注册地点: {loc_id}",
+                    })
         return issues
 
     def _check_timeline(self, chapters: List[Dict], timeline: Dict) -> List[Dict]:
         """检查时间线一致性"""
         issues = []
-        # 简化实现
+        chapter_nos = [ch.get("chapter_no") for ch in chapters if ch.get("chapter_no") is not None]
+        if chapter_nos and chapter_nos != sorted(chapter_nos):
+            issues.append({
+                "type": "chapter_order_invalid",
+                "severity": "high",
+                "message": "章节编号不是单调递增，时间线可能紊乱",
+            })
+
+        previous_time = None
+        for idx, chapter in enumerate(chapters, start=1):
+            chapter_no = chapter.get("chapter_no", idx)
+            chapter_time = chapter.get("chapter_time")
+            if chapter_time is None:
+                continue
+
+            if previous_time is not None and str(chapter_time) < str(previous_time):
+                issues.append({
+                    "type": "timeline_regression",
+                    "chapter_no": chapter_no,
+                    "severity": "high",
+                    "message": f"章节 {chapter_no} 的时间早于上一章",
+                })
+            previous_time = chapter_time
+
+        required_milestones = timeline.get("required_milestones", []) if isinstance(timeline, dict) else []
+        completed = set()
+        for chapter in chapters:
+            for m in chapter.get("milestones_completed", []) or []:
+                completed.add(m)
+        for m in required_milestones:
+            if m not in completed:
+                issues.append({
+                    "type": "missing_milestone",
+                    "severity": "medium",
+                    "message": f"关键里程碑未完成: {m}",
+                })
         return issues
 
     def _check_dead_characters(self, chapters: List[Dict], characters: Dict) -> List[Dict]:
         """检查已死亡角色是否错误出现"""
         issues = []
-        # 简化实现
+        dead_character_ids = set()
+        dead_character_names = set()
+        for cid, profile in characters.items():
+            if not isinstance(profile, dict):
+                continue
+            if str(profile.get("status", "")).lower() == "dead":
+                dead_character_ids.add(cid)
+                if profile.get("name"):
+                    dead_character_names.add(str(profile["name"]))
+
+        for idx, chapter in enumerate(chapters, start=1):
+            chapter_no = chapter.get("chapter_no", idx)
+            present = set(chapter.get("characters_present", []) or [])
+            wrong_ids = present.intersection(dead_character_ids)
+            for cid in wrong_ids:
+                issues.append({
+                    "type": "dead_character_appeared",
+                    "chapter_no": chapter_no,
+                    "severity": "high",
+                    "message": f"章节 {chapter_no} 中已死亡角色再次出现: {cid}",
+                })
+
+            draft = chapter.get("draft", "") or ""
+            for name in dead_character_names:
+                if name and name in draft and chapter.get("allow_flashback", False) is not True:
+                    issues.append({
+                        "type": "dead_character_text_appeared",
+                        "chapter_no": chapter_no,
+                        "severity": "medium",
+                        "message": f"章节 {chapter_no} 文本出现已死亡角色姓名: {name}",
+                    })
         return issues
 
     def _check_supernatural_rules(self, chapters: List[Dict]) -> List[Dict]:
         """检查灵异规则一致性"""
         issues = []
-        # 简化实现
+        for idx, chapter in enumerate(chapters, start=1):
+            chapter_no = chapter.get("chapter_no", idx)
+            stage = str(chapter.get("horror_stage", "setup")).lower()
+            draft = chapter.get("draft", "") or ""
+            forbidden = chapter.get("forbidden_revelations", []) or []
+
+            for token in forbidden:
+                if token and token in draft:
+                    issues.append({
+                        "type": "forbidden_reveal_leak",
+                        "chapter_no": chapter_no,
+                        "severity": "high",
+                        "message": f"章节 {chapter_no} 泄露了禁止揭示信息: {token}",
+                    })
+
+            if stage in {"setup", "investigation"}:
+                hard_truth_keywords = chapter.get("hard_truth_keywords", ["真相是", "幕后黑手", "最终答案"])
+                for kw in hard_truth_keywords:
+                    if kw and kw in draft:
+                        issues.append({
+                            "type": "premature_truth_reveal",
+                            "chapter_no": chapter_no,
+                            "severity": "high",
+                            "message": f"章节 {chapter_no} 在 {stage} 阶段出现过早真相揭示: {kw}",
+                        })
         return issues
 
 

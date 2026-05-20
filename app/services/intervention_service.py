@@ -138,4 +138,6 @@ class InterventionService:
         history_file = self.output_dir / "intervention_history.jsonl"
         with open(history_file, "w", encoding="utf-8") as f:
             for event in self.applied_interventions:
-                f.write(event.model_dump_json(ensure_ascii=False) + "\n")
+                # Pydantic V2 model_dump_json 不支持 ensure_ascii，使用 json.dumps
+                data = event.model_dump()
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")

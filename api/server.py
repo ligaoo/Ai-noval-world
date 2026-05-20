@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import sys
+import asyncio
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional
+
+# Windows 编码修复：强制使用 UTF-8
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    os.environ["PYTHONIOENCODING"] = "utf-8"
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,10 +35,14 @@ PROJECT_ROOT = Path(__file__).parent.parent
 WORLDS_DIR = PROJECT_ROOT / "worlds"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
+# 模拟状态存储
+running_simulations: Dict[str, Dict] = {}
+
 
 class SimulationRequest(BaseModel):
     world_id: str = "dark_city_001"
-    mode: str = "heuristic"
+    mode: str = "llm"
+    v2_phase: str = "v2.3"
     ticks: Optional[int] = None
     seed: int = 12345
     genre_id: str = "horror"
@@ -147,34 +161,96 @@ async def get_simulation_quality(sim_id: str):
     return {"reports": reports}
 
 
-@app.post("/api/simulations/run")
-async def run_simulation(request: SimulationRequest):
+def _run_simulation_sync(sim_id: str, request: SimulationRequest):
+    """同步运行模拟（在后台线程中调用）"""
     try:
+        from app.config import Config
         from app.models.world import WorldConfig
         from app.runner.simulation_runner import SimulationRunner
+
+        cfg = Config(PROJECT_ROOT)
+        if not cfg.is_llm_available():
+            running_simulations[sim_id]["status"] = "failed"
+            running_simulations[sim_id]["error"] = "LLM 未配置"
+            return
 
         world_dir = WORLDS_DIR / request.world_id
         world = WorldConfig.from_directory(world_dir)
 
+        # 最终版本统一使用：move+memory+LLM叙事+一致性修订（v2.3）
+        forced_mode = "llm"
+        forced_phase = "v2.3"
+
         runner = SimulationRunner(PROJECT_ROOT)
         result = runner.run(
             world=world,
-            mode=request.mode,
+            mode=forced_mode,
             ticks=request.ticks,
             seed=request.seed,
             genre_id=request.genre_id,
             target_chapters=request.target_chapters,
             chapter_no=request.chapter_no,
+            v2_phase=forced_phase,
         )
 
-        sim_id = result.simulation_id
+        running_simulations[sim_id]["status"] = "completed"
+        running_simulations[sim_id]["simulation_id"] = result.simulation_id
+        running_simulations[sim_id]["runtime_mode"] = forced_mode
+        running_simulations[sim_id]["runtime_phase"] = forced_phase
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        running_simulations[sim_id]["status"] = "failed"
+        running_simulations[sim_id]["error"] = str(e)
+
+
+@app.post("/api/simulations/run")
+async def run_simulation(request: SimulationRequest):
+    try:
+        from app.config import Config
+
+        cfg = Config(PROJECT_ROOT)
+        if not cfg.is_llm_available():
+            raise HTTPException(
+                status_code=400,
+                detail="LLM 未配置。最终版本要求启用 LLM 叙事，请先配置 OPENAI_API_KEY。",
+            )
+
+        # 生成模拟 ID
+        import time
+        sim_id = f"sim_{int(time.time() * 1000)}"
+        
+        # 初始化模拟状态
+        running_simulations[sim_id] = {
+            "status": "running",
+            "request": request.model_dump(),
+            "error": None,
+        }
+
+        # 在后台线程中运行模拟
+        thread = threading.Thread(target=_run_simulation_sync, args=(sim_id, request))
+        thread.daemon = True
+        thread.start()
+
         return {
             "success": True,
-            "simulation_id": sim_id,
-            "message": "Simulation completed successfully",
+            "sim_id": sim_id,
+            "message": "模拟已启动，请等待完成",
         }
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/simulations/{sim_id}/status")
+async def get_simulation_status(sim_id: str):
+    if sim_id not in running_simulations:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    
+    return running_simulations[sim_id]
 
 
 @app.get("/api/genres")

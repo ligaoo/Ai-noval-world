@@ -25,11 +25,15 @@ class NarrativeService:
         sim_dir: Path,
         llm_client: Optional[OpenAICompatibleClient] = None,
         trace_service: Optional[TraceService] = None,
+        force_rule_based: bool = False,
+        enable_consistency_check: bool = True,
     ):
         self.world = world
         self.sim_dir = sim_dir
         self.llm_client = llm_client
         self.trace_service = trace_service
+        self.force_rule_based = force_rule_based
+        self.enable_consistency_check = enable_consistency_check
         self.event_svc = EventLogService()
         self.consistency_svc = ConsistencyService(world, sim_dir, llm_client, trace_service)
 
@@ -60,18 +64,23 @@ class NarrativeService:
 
         # 3. LLM 生成正文（如果有 llm_client）
         draft = ""
-        if self.llm_client:
+        if self.llm_client and not self.force_rule_based:
             draft = self._llm_write_chapter(plan)
             with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
                 f.write(draft)
 
             # 4. 一致性检查 + revise once
-            report = self.consistency_svc.check_consistency(draft, plan, plot_events)
-            if not report["passed"] and report.get("violations"):
-                draft = self.consistency_svc.revise_once(draft, plan, plot_events)
-                # 重新保存修订后的版本
-                with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
-                    f.write(draft)
+            if self.enable_consistency_check:
+                report = self.consistency_svc.check_consistency(draft, plan, plot_events)
+                if not report["passed"] and report.get("violations"):
+                    draft = self.consistency_svc.revise_once(draft, plan, plot_events)
+                    # 重新保存修订后的版本
+                    with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
+                        f.write(draft)
+            else:
+                report = {"passed": True, "mode": "disabled", "violations": []}
+                with open(self.sim_dir / "consistency_report.json", "w", encoding="utf-8") as f:
+                    json.dump(report, f, ensure_ascii=False, indent=2)
         else:
             # 无 LLM：用规则生成简单草稿
             draft = self._rule_based_draft(plan)

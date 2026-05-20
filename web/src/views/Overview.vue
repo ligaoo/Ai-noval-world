@@ -22,6 +22,9 @@
         />
       </div>
     </div>
+    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #d1fae5;">
+      当前默认运行链路：`开 move` · `开记忆` · `开 LLM 叙事改写` · `开一致性检查+修订`（`llm + v2.3`）
+    </div>
 
     <!-- 世界选择器 -->
     <div style="background: rgba(42, 45, 53, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
@@ -572,6 +575,7 @@ const startSimulation = async () => {
   simulationResult.value = null
 
   try {
+    // 1. 启动模拟
     const response = await fetch('http://localhost:8421/api/simulations/run', {
       method: 'POST',
       headers: {
@@ -579,7 +583,8 @@ const startSimulation = async () => {
       },
       body: JSON.stringify({
         world_id: worldBible.value.world_id,
-        mode: 'heuristic',
+        mode: 'llm',
+        v2_phase: 'v2.3',
         seed: 12345,
         genre_id: 'horror',
         target_chapters: 10,
@@ -588,18 +593,47 @@ const startSimulation = async () => {
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const error = await response.json()
+      throw new Error(error.detail || '启动模拟失败')
     }
 
-    const result = await response.json()
-    simulationResult.value = result
+    const startResult = await response.json()
+    const simId = startResult.sim_id
     
-    // 显示成功提示
-    if (result.success) {
-      alert(`✅ 模拟完成！\n\n模拟 ID: ${result.simulation_id}\n消息: ${result.message}`)
-    } else {
-      alert(`❌ 模拟失败\n\n错误: ${result.error || '未知错误'}`)
+    console.log('模拟已启动，ID:', simId)
+
+    // 2. 轮询检查状态
+    let pollCount = 0
+    const maxPolls = 300 // 最多等 5 分钟（每次 1 秒）
+    
+    while (pollCount < maxPolls) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      pollCount++
+
+      try {
+        const statusRes = await fetch(`http://localhost:8421/api/simulations/${simId}/status`)
+        if (!statusRes.ok) continue
+        
+        const status = await statusRes.json()
+        console.log('模拟状态:', status)
+
+        if (status.status === 'completed') {
+          simulationResult.value = status
+          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: llm / v2.3`)
+          break
+        } else if (status.status === 'failed') {
+          throw new Error(status.error || '模拟运行失败')
+        }
+        // 继续等待 running 状态
+      } catch (e) {
+        console.warn('检查状态失败:', e)
+      }
     }
+
+    if (pollCount >= maxPolls) {
+      alert(`⏱ 模拟仍在运行中...\n\n模拟 ID: ${simId}\n请稍后在模拟列表中查看结果`)
+    }
+
   } catch (error) {
     console.error('模拟请求失败:', error)
     alert(`❌ 模拟请求失败\n\n错误信息: ${error.message}\n\n请确保后端服务正在运行 (端口 8421)`)

@@ -271,4 +271,6 @@ class DirectorService:
         history_file = output_dir / "director_history.jsonl"
         with open(history_file, "w", encoding="utf-8") as f:
             for proposal in self.intervention_history:
-                f.write(proposal.model_dump_json(ensure_ascii=False) + "\n")
+                # Pydantic V2 model_dump_json 不支持 ensure_ascii，使用 json.dumps
+                data = proposal.model_dump()
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")

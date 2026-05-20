@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -39,7 +40,9 @@ class MemoryService:
     def _save_memory(self, memory: Memory) -> None:
         """持久化记忆"""
         with open(self.memories_file, "a", encoding="utf-8") as f:
-            f.write(memory.model_dump_json(ensure_ascii=False) + "\n")
+            # Pydantic V2 model_dump_json 不支持 ensure_ascii，使用 json.dumps
+            data = memory.model_dump()
+            f.write(json.dumps(data, ensure_ascii=False) + "\n")
         self._memories.append(memory)
 
     # ==========================================

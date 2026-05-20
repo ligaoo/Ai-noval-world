@@ -199,4 +199,6 @@ class PlotArcService:
 
         state_file = output_dir / "plot_arc_state.json"
         with open(state_file, "w", encoding="utf-8") as f:
-            f.write(self.plot_arc_state.model_dump_json(indent=2, ensure_ascii=False))
+            # Pydantic V2 model_dump_json 不支持 ensure_ascii，使用 json.dumps
+            data = self.plot_arc_state.model_dump()
+            f.write(json.dumps(data, indent=2, ensure_ascii=False))
