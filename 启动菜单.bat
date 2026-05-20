@@ -40,7 +40,7 @@ echo  Starting services...
 echo ========================================
 echo.
 cd /d "%~dp0"
-start "Backend API - Port 8421" cmd /k "set PYTHONPATH=%~dp0 && python -m uvicorn api.server:app --host 0.0.0.0 --port 8421 --reload"
+start "Backend API - Port 8421" cmd /k "set PYTHONPATH=%~dp0 && .venv\Scripts\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port 8421"
 timeout /t 3 /nobreak >nul
 cd web
 start "Frontend Web - Port 4242" cmd /k "npm run dev"
@@ -62,7 +62,7 @@ echo ========================================
 echo.
 cd /d "%~dp0"
 set PYTHONPATH=%~dp0
-python -m uvicorn api.server:app --host 0.0.0.0 --port 8421 --reload
+.venv\Scripts\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port 8421
 pause
 goto MENU
 
@@ -88,7 +88,7 @@ echo.
 
 cd /d "%~dp0"
 echo [1/2] Installing Python dependencies...
-pip install -r requirements.txt
+.venv\Scripts\pip.exe install -r requirements.txt
 echo.
 
 echo [2/2] Installing frontend dependencies...

@@ -85,17 +85,32 @@ def start_backend():
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
 
-    process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "api.server:app",
-         "--host", "0.0.0.0", "--port", "8421", "--reload"],
-        env=env,
-        cwd=PROJECT_ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True
-    )
+    # Windows: 使用 start 命令在新窗口启动，避免流关闭问题
+    if sys.platform == "win32":
+        process = subprocess.Popen(
+            ["cmd", "/c", "start", "Backend API",
+             sys.executable, "-m", "uvicorn", "api.server:app",
+             "--host", "0.0.0.0", "--port", "8421"],
+            env=env,
+            cwd=PROJECT_ROOT,
+        )
+    # macOS: 使用 Terminal.app 或 osascript
+    elif sys.platform == "darwin":
+        cmd = f'cd "{PROJECT_ROOT}" && "{sys.executable}" -m uvicorn api.server:app --host 0.0.0.0 --port 8421'
+        process = subprocess.Popen(
+            ["osascript", "-e",
+             f'tell application "Terminal" to do script "{cmd}"'],
+            env=env,
+            cwd=PROJECT_ROOT,
+        )
+    # Linux: 尝试常用终端，否则直接运行（输出在同一窗口）
+    else:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "api.server:app",
+             "--host", "0.0.0.0", "--port", "8421"],
+            env=env,
+            cwd=PROJECT_ROOT,
+        )
     return process
 
 def start_frontend():
@@ -104,15 +119,27 @@ def start_frontend():
 
     web_dir = PROJECT_ROOT / "web"
 
-    process = subprocess.Popen(
-        ["npm", "run", "dev"],
-        cwd=web_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True
-    )
+    # Windows: 使用 start 命令在新窗口启动
+    if sys.platform == "win32":
+        process = subprocess.Popen(
+            ["cmd", "/c", "start", "Frontend Web",
+             "npm", "run", "dev"],
+            cwd=web_dir,
+        )
+    # macOS: 使用 Terminal.app
+    elif sys.platform == "darwin":
+        cmd = f'cd "{web_dir}" && npm run dev'
+        process = subprocess.Popen(
+            ["osascript", "-e",
+             f'tell application "Terminal" to do script "{cmd}"'],
+            cwd=web_dir,
+        )
+    # Linux: 直接运行（输出在同一窗口）
+    else:
+        process = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=web_dir,
+        )
     return process
 
 def main():
@@ -167,32 +194,10 @@ def main():
         print(f"   {Colors.WARNING}- 按 Ctrl+C 停止所有服务{Colors.ENDC}")
 
         print(f"\n{Colors.HEADER}═══════════════════════════════════════════════════════════════{Colors.ENDC}")
-        print(f"\n{Colors.OKBLUE}日志输出 (按 Ctrl+C 退出):{Colors.ENDC}\n")
+        print(f"\n{Colors.OKBLUE}服务已启动 (按 Ctrl+C 退出):{Colors.ENDC}")
+        print(f"\n{Colors.WARNING}注意：后端和前端日志将在各自的窗口显示{Colors.ENDC}\n")
 
-        import threading
-
-        def read_backend_output():
-            try:
-                for line in iter(backend_process.stdout.readline, ''):
-                    if line:
-                        print(f"{Colors.OKCYAN}[API] {line.strip()}{Colors.ENDC}")
-            except:
-                pass
-
-        def read_frontend_output():
-            try:
-                for line in iter(frontend_process.stdout.readline, ''):
-                    if line:
-                        print(f"{Colors.OKGREEN}[Web] {line.strip()}{Colors.ENDC}")
-            except:
-                pass
-
-        backend_thread = threading.Thread(target=read_backend_output, daemon=True)
-        frontend_thread = threading.Thread(target=read_frontend_output, daemon=True)
-
-        backend_thread.start()
-        frontend_thread.start()
-
+        # 保持进程运行，直到用户中断
         while True:
             time.sleep(1)
             if backend_process.poll() is not None:

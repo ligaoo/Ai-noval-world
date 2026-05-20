@@ -4,21 +4,31 @@
 
 ## 🚀 快速启动
 
-### 方式一：双击启动（推荐）
-
-双击 `启动.bat` 文件即可一键启动前后端服务。
-
-### 方式二：Python 启动（开发者推荐）
+### 方式一：Python 启动（推荐）
 
 ```bash
 python launcher.py
 ```
 
-### 方式三：PowerShell 启动
+### 方式二：PowerShell 启动
 
 ```powershell
 .\start.ps1
 ```
+
+### 方式三：启动菜单（Windows 推荐）
+
+双击 `启动菜单.bat` 打开交互式启动菜单，可选择启动方式、检查环境、安装依赖。
+
+## 🖥️ 平台兼容性
+
+| 平台 | 启动方式 | 说明 |
+|------|---------|------|
+| **Windows** | `python launcher.py` 或 双击 `启动菜单.bat` | ✅ 完全支持，后端/前端在独立窗口 |
+| **macOS** | `python3 launcher.py` | ✅ 完全支持，在 Terminal.app 打开新窗口 |
+| **Linux** | `python3 launcher.py` | ✅ 完全支持，输出在同一窗口 |
+
+> 💡 **核心 Python 代码完全跨平台**，只有终端窗口管理有平台差异。API 接口、模拟逻辑、文件格式在所有平台 100% 兼容。
 
 ## 📋 服务说明
 
@@ -132,9 +142,9 @@ POST /api/simulations/run
 
 ```
 ai-noval-world/
-├── 🚀 启动.bat              # 一键启动脚本
-├── 🚀 launcher.py           # Python 启动脚本
+├── 🚀 launcher.py           # Python 启动脚本（推荐）
 ├── 🚀 start.ps1            # PowerShell 启动脚本
+├── 🚀 启动菜单.bat          # Windows 交互式启动菜单
 ├── 📖 README.md            # 项目说明文档
 ├── 📖 启动说明.md          # 详细启动指南
 ├── requirements.txt        # Python 依赖
