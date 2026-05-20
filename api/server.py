@@ -11,8 +11,10 @@ from typing import Dict, List, Optional
 
 # Windows 编码修复：强制使用 UTF-8
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     os.environ["PYTHONIOENCODING"] = "utf-8"
 
 from fastapi import FastAPI, HTTPException
