@@ -85,6 +85,19 @@ class RewriteOptimizerService:
             "instruction": "修复角色声音漂移，使对白符合角色设定。",
             "constraints": ["关键信息必须保留", "不能改变对话内容"],
         },
+        # V1.1 新增任务类型
+        RewriteTaskType.REDUCE_CLUE_DENSITY: {
+            "instruction": "降低线索密度，将部分线索后移或改为更含蓄的暗示。不要删除必须包含的线索。",
+            "constraints": ["不能删除 must_include 的线索", "保留所有必须的信息", "可以将部分线索改为伏笔形式"],
+        },
+        RewriteTaskType.REDUCE_OVERWRITING: {
+            "instruction": "减少过度修辞，删除重复或不必要的比喻和装饰性描写，保持文风克制。",
+            "constraints": ["保留必要的信息性环境描写", "不能改变场景的氛围基调"],
+        },
+        RewriteTaskType.FIX_CONTINUITY: {
+            "instruction": "修复时间线或连续性矛盾。统一时间表述，确保与世界设定一致。",
+            "constraints": ["不能改变事件本身，只修改表述", "必须与 world_bible.timeline 保持一致"],
+        },
     }
 
     def __init__(
@@ -206,6 +219,15 @@ class RewriteOptimizerService:
             "fear_escalation_flat": RewriteTaskType.ENHANCE_HORROR_ATMOSPHERE,
             "over_explained_supernatural": RewriteTaskType.REDUCE_EXPOSITION,
             "forbidden_horror_device": RewriteTaskType.RESTORE_GENRE_CONSTRAINTS,
+            # V1.1 新增映射
+            "clue_overload": RewriteTaskType.REDUCE_CLUE_DENSITY,
+            "missing_required_character_beat": RewriteTaskType.DEEPEN_CHARACTER,
+            "thin_emotional_motivation": RewriteTaskType.DEEPEN_CHARACTER,
+            "metaphor_overload": RewriteTaskType.REDUCE_OVERWRITING,
+            "decorative_description": RewriteTaskType.REDUCE_OVERWRITING,
+            "weak_horror_hook": RewriteTaskType.IMPROVE_HOOK,
+            "timeline_conflict": RewriteTaskType.FIX_CONTINUITY,
+            "timeline_ambiguous_statement": RewriteTaskType.FIX_CONTINUITY,
         }
         return mapping.get(problem_type)
 

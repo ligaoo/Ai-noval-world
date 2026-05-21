@@ -18,7 +18,22 @@
         "灵异规则解释",
         "真相揭露",
         "大规模死亡"
-      ]
+      ],
+      "chapter1_specific": {
+        "max_horror_intensity": 2,
+        "required_ending_hook": true,
+        "hook_must_be_subtle": true,
+        "forbidden_direct_encounter": true,
+        "allowed_ending_hooks": [
+          "轻微的声音残留",
+          "物体微微移动",
+          "突然的冷意",
+          "似曾相识的感觉",
+          "镜子中的短暂异象",
+          "门外的脚步声消失",
+          "墙上的影子不对"
+        ]
+      }
     },
     {
       "stage_id": "clear_threat",

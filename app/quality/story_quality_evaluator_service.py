@@ -177,6 +177,14 @@ class StoryQualityEvaluatorService:
             base_problems = base_result.problems
             base_strengths = base_result.strengths
 
+            # V1.1 新增：基于规则的问题检测
+            v11_rule_problems = self._detect_v11_rule_problems(
+                chapter_plan=chapter_plan,
+                chapter_draft=chapter_draft,
+                chapter_no=chapter_no,
+            )
+            base_problems.extend(v11_rule_problems)
+
             classified_problems = self.problem_classifier.classify_problems(
                 raw_problems=base_problems,
                 scores=base_scores,
@@ -333,6 +341,87 @@ class StoryQualityEvaluatorService:
             summaries.append(f"... and {len(open_threads) - 10} more threads")
 
         return "\n".join(summaries)
+
+    # V1.1 新增：基于规则的问题检测
+    def _detect_v11_rule_problems(
+        self,
+        chapter_plan: Dict[str, Any],
+        chapter_draft: str,
+        chapter_no: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        V1.1 基于规则检测质量问题
+        包括：线索密度、角色情感节拍、修辞密度、恐怖钩子等
+        """
+        problems: List[Dict[str, Any]] = []
+
+        # 1. 检测线索密度（第一章最多3个线索）
+        selected_clues = chapter_plan.get("selected_clues", [])
+        clue_budget = chapter_plan.get("clue_budget", {})
+        max_clues = clue_budget.get("max_clues", 3 if chapter_no == 1 else 5)
+
+        if len(selected_clues) > max_clues:
+            problems.append({
+                "type": "clue_overload",
+                "problem_id": "v11_clue_overload",
+                "message": f"章节线索数量 ({len(selected_clues)}) 超过预算 ({max_clues})",
+                "evidence": [f"选中线索: {[c.get('clue_id', '') for c in selected_clues]}"],
+                "can_be_rewritten": True,
+            })
+
+        # 2. 检测是否缺少必须的角色情感节拍（仅第一章）
+        if chapter_no == 1:
+            required_beats = chapter_plan.get("required_character_beats", [])
+            if not required_beats:
+                problems.append({
+                    "type": "missing_required_character_beat",
+                    "problem_id": "v11_missing_beat",
+                    "message": "第一章缺少角色情感节拍，主角动机展示不足",
+                    "evidence": ["未检测到 required_character_beats 配置"],
+                    "can_be_rewritten": True,
+                })
+
+        # 3. 检测比喻密度（简单的关键词计数）
+        metaphor_keywords = ["像", "如", "似", "仿佛", "犹如", "宛如"]
+        metaphor_count = sum(chapter_draft.count(kw) for kw in metaphor_keywords)
+        total_chars = len(chapter_draft)
+        if total_chars > 0:
+            metaphor_ratio = metaphor_count / (total_chars / 100)  # 每100字的比喻数
+            if metaphor_ratio > 1.5:  # 阈值：每100字超过1.5个比喻
+                problems.append({
+                    "type": "metaphor_overload",
+                    "problem_id": "v11_metaphor_overload",
+                    "message": f"比喻密度过高（每100字约 {metaphor_ratio:.1f} 个比喻）",
+                    "evidence": [f"检测到 {metaphor_count} 个比喻类关键词"],
+                    "can_be_rewritten": True,
+                })
+
+        # 4. 检测装饰性描写（检测连续的形容词堆砌）
+        import re
+        adj_pattern = r"的[^，。！？]{0,5}的"
+        consecutive_adjectives = len(re.findall(adj_pattern, chapter_draft))
+        if consecutive_adjectives > 8:
+            problems.append({
+                "type": "decorative_description",
+                "problem_id": "v11_decorative_desc",
+                "message": "存在过多装饰性描写，建议压缩",
+                "evidence": [f"检测到 {consecutive_adjectives} 处连续形容词结构"],
+                "can_be_rewritten": True,
+            })
+
+        # 5. 检测第一章是否有轻异常钩子（仅第一章）
+        if chapter_no == 1:
+            ending_hook = chapter_plan.get("ending_hook", "")
+            if not ending_hook:
+                problems.append({
+                    "type": "weak_horror_hook",
+                    "problem_id": "v11_weak_hook",
+                    "message": "第一章结尾缺少轻异常钩子",
+                    "evidence": ["未检测到 ending_hook 配置"],
+                    "can_be_rewritten": True,
+                })
+
+        return problems
 
     def save_report(self, report: QualityReport) -> None:
         report_file = self.quality_reports_dir / f"{report.chapter_id}_quality.json"

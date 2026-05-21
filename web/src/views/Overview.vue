@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div style="max-width: 1200px; margin: 0 auto;">
     <!-- 页面标题 -->
     <div style="margin-bottom: 32px; display: flex; align-items: center; justify-content: space-between;">
@@ -168,6 +168,17 @@
               + 添加主题
             </button>
           </div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <label style="font-size: 14px; color: #9ca3af; display: block; margin-bottom: 8px;">剧情线（逗号分隔）</label>
+          <input
+            v-model="plotArcIdsText"
+            @blur="applyPlotArcIdsFromText"
+            placeholder="例如：arc_hospital_truth, arc_identity_mystery"
+            style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 12px 16px; border-radius: 12px; outline: none;"
+          />
+          <p style="font-size: 12px; color: #6b7280; margin-top: 6px;">用于生成器下拉联动；详细阶段可到“剧情弧”页面编辑。</p>
         </div>
       </div>
 
@@ -432,6 +443,7 @@ const loadSelectedWorld = async () => {
     worldStore.characters = worldData.characters?.characters || []
     worldStore.locations = worldData.map?.locations || []
     worldStore.clues = worldData.clues?.clues || []
+    worldStore.plotArcs = worldData.plot_arcs?.arcs || worldData.plot_arcs || []
     
     alert(`✅ 已加载世界: ${worldStore.worldBible.title}`)
   } catch (error) {
@@ -512,6 +524,33 @@ const worldBible = computed(() => {
   }
   return worldStore.worldBible
 })
+
+const plotArcIdsText = computed({
+  get() {
+    const arcs = Array.isArray(worldStore.plotArcs) ? worldStore.plotArcs : []
+    return arcs.map(arc => arc?.arc_id).filter(Boolean).join(', ')
+  },
+  set() {}
+})
+
+const applyPlotArcIdsFromText = (event) => {
+  const raw = (event?.target?.value || '').trim()
+  if (!raw) {
+    worldStore.plotArcs = []
+    return
+  }
+
+  const ids = [...new Set(raw.split(',').map(s => s.trim()).filter(Boolean))]
+  const existingMap = new Map((worldStore.plotArcs || []).map(arc => [arc.arc_id, arc]))
+  worldStore.plotArcs = ids.map(id => existingMap.get(id) || {
+    arc_id: id,
+    name: id,
+    status: 'active',
+    progress: 0,
+    current_stage: '',
+    stages: [],
+  })
+}
 
 // 初始化加载
 onMounted(async () => {

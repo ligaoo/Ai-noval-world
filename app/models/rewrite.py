@@ -22,6 +22,10 @@ class RewriteTaskType(str, Enum):
     ENHANCE_HORROR_ATMOSPHERE = "enhance_horror_atmosphere"
     RESTORE_GENRE_CONSTRAINTS = "restore_genre_constraints"
     RESTORE_CHARACTER_VOICE = "restore_character_voice"
+    # V1.1 新增
+    REDUCE_CLUE_DENSITY = "reduce_clue_density"
+    REDUCE_OVERWRITING = "reduce_overwriting"
+    FIX_CONTINUITY = "fix_continuity"
 
 
 @dataclass

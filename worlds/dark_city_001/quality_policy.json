@@ -29,5 +29,22 @@
     "chapter_hook": 0.05,
     "payoff_quality": 0.02,
     "readability": 0.01
+  },
+  "v11_constraints": {
+    "clue_budget": {
+      "chapter_1_max_clues": 3,
+      "default_max_clues_per_chapter": 5,
+      "max_must_include_clues": 2
+    },
+    "style_thresholds": {
+      "max_metaphors_per_paragraph": 2,
+      "max_decorative_descriptions_ratio": 0.3
+    },
+    "opening_chapter": {
+      "require_character_beat": true,
+      "require_subtle_anomaly_hook": true,
+      "forbid_direct_supernatural_attack": true,
+      "forbid_complete_rule_explanation": true
+    }
   }
 }

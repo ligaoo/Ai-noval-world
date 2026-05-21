@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from app.llm_client import OpenAICompatibleClient
 from app.models.state import WorldState
 from app.models.world import WorldConfig
+from app.services.timeline_consistency_checker import TimelineConsistencyChecker
 from app.services.world_state_service import WorldStateService
 
 
@@ -23,17 +24,22 @@ class Violation:
 
 class ConsistencyCheckService:
     """
-    V1 两层一致性检查：
+    V1.1 三层一致性检查：
     - RuleCheck：程序可判断的先拦截
+    - TimelineCheck：时间线一致性检查（V1.1 新增）
     - LLMCheck：语义层（可选，需 OPENAI_API_KEY）
     同时支持：最多自动修订一次。
     """
 
     REPORT_FILE = "consistency_report.json"
 
-    def __init__(self):
+    def __init__(self, world_bible: Dict[str, Any] = None):
         self.state_svc = WorldStateService()
         self.llm = OpenAICompatibleClient.from_env()
+
+        # V1.1 时间线检查器
+        self.world_bible = world_bible or {}
+        self.timeline_checker = TimelineConsistencyChecker(world_bible=self.world_bible)
 
     def check_and_maybe_revise(self, sim_dir: Path, world: WorldConfig) -> None:
         state = self.state_svc.load(sim_dir)
@@ -109,7 +115,7 @@ class ConsistencyCheckService:
                         )
                     )
 
-        # 3) 新地点/新对象（V1 粗检查）：若出现明显不在配置中的“固定词”
+        # 3) 新地点/新对象（V1 粗检查）：若出现明显不在配置中的"固定词"
         forbidden_keywords = ["四楼", "地下室", "幕后人物", "真名"]
         for kw in forbidden_keywords:
             if kw in chapter_text:
@@ -119,6 +125,19 @@ class ConsistencyCheckService:
                         text=kw,
                         reason="正文出现疑似新地点/新设定关键词（V1 规则层保守拦截）。",
                         suggested_fix="删掉该词或改成更模糊的描述（不引入新地点/新规则）。",
+                    )
+                )
+
+        # V1.1 4) 时间线一致性检查
+        if self.world_bible:
+            timeline_result = self.timeline_checker.check(chapter_text)
+            for issue in timeline_result.get("issues", []):
+                violations.append(
+                    Violation(
+                        type=issue.get("type", "timeline_issue"),
+                        text=issue.get("phrase", ""),
+                        reason=issue.get("reason", "时间线描述与标准时间不符。"),
+                        suggested_fix=timeline_result.get("rewrite_suggestion", ""),
                     )
                 )
 

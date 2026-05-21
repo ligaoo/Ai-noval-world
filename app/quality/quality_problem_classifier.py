@@ -36,6 +36,7 @@ class QualityProblemClassifier:
     对问题进行分类、优先级排序和严重程度评估
     """
 
+    # V1.1 新增问题类型的严重程度规则
     PROBLEM_SEVERITY_RULES = {
         "weak_conflict": {"base_severity": "medium", "score_threshold": 5},
         "slow_middle": {"base_severity": "medium", "score_threshold": 5},
@@ -55,6 +56,13 @@ class QualityProblemClassifier:
         "low_scene_vividness": {"base_severity": "low", "score_threshold": 6},
         "unclear_character_goal": {"base_severity": "medium", "score_threshold": 5},
         "poor_dialogue_voice": {"base_severity": "medium", "score_threshold": 6},
+        # V1.1 新增
+        "clue_overload": {"base_severity": "high", "score_threshold": 6},
+        "missing_required_character_beat": {"base_severity": "high", "score_threshold": 6},
+        "thin_emotional_motivation": {"base_severity": "medium", "score_threshold": 6},
+        "metaphor_overload": {"base_severity": "low", "score_threshold": 7},
+        "decorative_description": {"base_severity": "low", "score_threshold": 7},
+        "weak_horror_hook": {"base_severity": "medium", "score_threshold": 5},
     }
 
     PROBLEM_DIMENSION_MAPPING = {
@@ -76,6 +84,13 @@ class QualityProblemClassifier:
         "low_scene_vividness": "scene_vividness",
         "unclear_character_goal": "character_depth",
         "poor_dialogue_voice": "dialogue_quality",
+        # V1.1 新增
+        "clue_overload": "pacing",
+        "missing_required_character_beat": "character_depth",
+        "thin_emotional_motivation": "emotional_curve",
+        "metaphor_overload": "style_consistency",
+        "decorative_description": "style_consistency",
+        "weak_horror_hook": "horror_atmosphere",
     }
 
     PROBLEM_PRIORITY_WEIGHTS = {
@@ -97,6 +112,13 @@ class QualityProblemClassifier:
         "low_scene_vividness": 3,
         "over_explanation": 2,
         "too_many_threads_opened": 2,
+        # V1.1 新增
+        "clue_overload": 8,
+        "missing_required_character_beat": 8,
+        "thin_emotional_motivation": 6,
+        "metaphor_overload": 3,
+        "decorative_description": 3,
+        "weak_horror_hook": 7,
     }
 
     def classify_problems(

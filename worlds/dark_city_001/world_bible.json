@@ -11,6 +11,17 @@
   "themes": [
     "记忆是否可靠",
     "人为了逃避愧疚会制造怎样的谎言"
-  ]
+  ],
+  "timeline": {
+    "hospital_accident_years_ago": 10,
+    "actual_abandoned_years_ago": 9,
+    "official_closed_years_ago": 2,
+    "current_year_label": "now"
+  },
+  "timeline_explanations": {
+    "official_closed_years_ago": "官方文件两年前才登记停用",
+    "actual_abandoned_years_ago": "附近居民认为九年前起就没人正常进出",
+    "hospital_accident_years_ago": "十年前发生旧医院事故"
+  }
 }
 

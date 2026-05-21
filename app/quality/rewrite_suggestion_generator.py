@@ -187,6 +187,61 @@ class RewriteSuggestionGenerator:
                 "对话内容必须保持不变",
             ],
         },
+        # V1.1 新增问题类型到修稿建议的映射
+        "clue_overload": {
+            "type": "reduce_clue_density",
+            "rewrite_task": "reduce_clue_density",
+            "message_template": "线索密度过高，将部分线索后移或改为更含蓄的暗示，避免第一章像线索清单。",
+            "constraints": [
+                "不能删除必须包含的线索",
+                "线索的核心信息必须保留",
+            ],
+        },
+        "missing_required_character_beat": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "缺少必须的角色情感节拍，需要补充主角的内心活动或回忆，展示其行动背后的情感动机。",
+            "constraints": [
+                "情感描写必须符合角色性格",
+                "不能添加新的事实信息",
+            ],
+        },
+        "thin_emotional_motivation": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "主角的情感动机薄弱，需要通过细节描写强化其行动的情感驱动力。",
+            "constraints": [
+                "不能改变角色的行动序列",
+                "不能添加新的背景故事",
+            ],
+        },
+        "metaphor_overload": {
+            "type": "reduce_overwriting",
+            "rewrite_task": "reduce_overwriting",
+            "message_template": "比喻堆砌过多，删除重复或不必要的修辞，保持文风克制。",
+            "constraints": [
+                "保留必要的信息性环境描写",
+                "不能改变场景的氛围基调",
+            ],
+        },
+        "decorative_description": {
+            "type": "reduce_overwriting",
+            "rewrite_task": "reduce_overwriting",
+            "message_template": "装饰性描写过多，压缩过度修辞的段落，让描写服务于情节和氛围。",
+            "constraints": [
+                "保留关键的环境信息",
+                "不能删除对氛围有重要作用的描写",
+            ],
+        },
+        "weak_horror_hook": {
+            "type": "improve_horror_hook",
+            "rewrite_task": "improve_hook",
+            "message_template": "第一章的恐怖钩子薄弱，需要在结尾增加轻微的异常感，制造不安氛围。",
+            "constraints": [
+                "只能使用轻微异常，不能出现直接的鬼怪攻击",
+                "不能解释灵异规则",
+            ],
+        },
     }
 
     def generate_suggestions(

@@ -26,11 +26,11 @@
               class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold"
               :class="getTypeColor(character.agent_type)"
             >
-              {{ character.name.charAt(0) }}
+              {{ (character.name || '?').charAt(0) }}
             </div>
             <div>
-              <h3 class="text-lg font-semibold">{{ character.name }}</h3>
-              <span class="text-sm text-gray-400">{{ character.role }}</span>
+              <h3 class="text-lg font-semibold">{{ character.name || '未命名' }}</h3>
+              <span class="text-sm text-gray-400">{{ character.role || '-' }}</span>
             </div>
           </div>
           <PBadge
@@ -42,7 +42,7 @@
         <!-- 性格标签 -->
         <div class="flex flex-wrap gap-2 mb-4">
           <span
-            v-for="trait in character.traits.slice(0, 3)"
+            v-for="trait in (character.traits || []).slice(0, 3)"
             :key="trait"
             class="px-2 py-1 rounded-lg text-xs bg-noir-700 text-gray-300"
           >
@@ -54,7 +54,7 @@
         <div class="flex items-center justify-center mb-4">
           <div class="grid grid-cols-4 gap-2 text-center">
             <div
-              v-for="(value, skill) in character.skills"
+              v-for="(value, skill) in (character.skills || {})"
               :key="skill"
               class="flex flex-col items-center"
             >
@@ -72,7 +72,7 @@
         <!-- 短期目标 -->
         <div class="p-3 rounded-xl bg-noir-800/50">
           <p class="text-xs text-gray-500 mb-1">短期目标</p>
-          <p class="text-sm text-gray-300 line-clamp-2">{{ character.goals.short_term }}</p>
+          <p class="text-sm text-gray-300 line-clamp-2">{{ character.goals?.short_term || '-' }}</p>
         </div>
 
         <!-- 悬停操作按钮 -->

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="space-y-6">
     <!-- 页面标题 -->
     <div class="flex items-center justify-between">
@@ -56,10 +56,9 @@
               v-model="params.arc_id"
               class="w-full bg-noir-800 border border-noir-600 rounded-lg p-3 text-white focus:outline-none focus:border-neon-purple"
             >
-              <option value="arc_hospital_truth">医院真相篇</option>
-              <option value="arc_identity_mystery">身份谜团篇</option>
-              <option value="arc_ancestor_secret">老宅秘闻篇</option>
-              <option value="unspecified">不指定</option>
+              <option v-for="arc in plotArcOptions" :key="arc.value" :value="arc.value">
+                {{ arc.label }}
+              </option>
             </select>
           </div>
 
@@ -96,6 +95,32 @@
 
       <!-- 右侧：候选展示 -->
       <div class="lg:col-span-2 space-y-4">
+        <!-- 批量操作按钮 -->
+        <div v-if="characterCandidates.length > 0" class="flex gap-3 flex-wrap">
+          <button
+            @click="batchApprove"
+            class="px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <ThumbsUp class="w-4 h-4" />
+            批量批准 ({{ characterCandidates.filter(c => c.status !== 'approved').length }})
+          </button>
+          <button
+            @click="batchCommit"
+            :disabled="approvedCount === 0"
+            class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <Database class="w-4 h-4" />
+            批量入库 ({{ approvedCount }})
+          </button>
+          <button
+            @click="batchReject"
+            class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <X class="w-4 h-4" />
+            清空所有
+          </button>
+        </div>
+
         <div v-if="characterCandidates.length === 0" class="glass-card p-12 text-center">
           <Users class="w-16 h-16 mx-auto text-gray-500 mb-4" />
           <h3 class="text-xl font-semibold text-gray-400 mb-2">暂无候选角色</h3>
@@ -228,7 +253,7 @@ import { ref, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useWorldStore } from '@/stores/world'
 import { useGeneratorStore } from '@/stores/generator'
-import { Users, Sparkles, Pencil, CheckCircle, ThumbsUp, X, Settings } from 'lucide-vue-next'
+import { Users, Sparkles, Pencil, CheckCircle, ThumbsUp, X, Settings, Database } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
 const generatorStore = useGeneratorStore()
@@ -237,7 +262,7 @@ const toast = useToast()
 const params = ref({
   character_type: 'supporting',
   count: 3,
-  arc_id: 'arc_hospital_truth',
+  arc_id: 'unspecified',
   creativity: 50
 })
 
@@ -248,62 +273,85 @@ const editForm = ref({})
 const characterCandidates = computed(() => generatorStore.characterCandidates)
 const isGenerating = computed(() => generatorStore.isGenerating)
 const approvedCount = computed(() => characterCandidates.value.filter(c => c.status === 'approved').length)
+const plotArcOptions = computed(() => {
+  const arcs = Array.isArray(worldStore.plotArcs) ? worldStore.plotArcs : []
+  const options = arcs
+    .filter(arc => arc && arc.arc_id)
+    .map(arc => ({
+      value: arc.arc_id,
+      label: arc.name || arc.arc_id,
+    }))
+  options.push({ value: 'unspecified', label: '不指定' })
+  return options
+})
 
 const generateCharacter = async () => {
   generatorStore.setGenerating(true)
-  
-  setTimeout(() => {
-    const mockCandidates = generateMockCandidates()
-    generatorStore.addCandidates(mockCandidates)
-    generatorStore.setGenerating(false)
-    toast.add({ severity: 'success', summary: '生成完成', detail: `已生成 ${params.value.count} 个角色候选`, life: 3000 })
-  }, 1500)
-}
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 20000)
+  try {
+    const response = await fetch('http://localhost:8421/api/generate/characters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        world_id: worldStore.worldBible?.world_id || worldStore.worldId || 'dark_city_001',
+        count: params.value.count,
+        genre: 'horror',
+      }),
+    })
 
-const generateMockCandidates = () => {
-  const traits = ['敏锐', '强势', '有职业执念', '冷静', '谨慎', '好奇心强', '记忆力超群', '神秘', '阴暗', '阳光']
-  
-  const names = ['陈默', '林薇', '张磊', '王芳', '李明']
-  const roles = ['私家侦探', '警察', '记者', '医生', '教师']
-  const summaries = [
-    '一个追查旧案的侦探，在调查过程中逐渐发现自己与事件的关联',
-    '警局的老刑警，看似粗犷但心思缜密，掌握着很多不为人知的秘密',
-    '地方新闻记者，职业敏感，总是能挖到第一手消息但容易卷入麻烦',
-    '心理医生，善于观察人心，自己却藏着一个深埋心底的秘密',
-    '退休警察，看起来普通但经历丰富，能提供重要线索'
-  ]
-
-  const candidates = []
-  for (let i = 0; i < params.value.count; i++) {
-    const roleTraits = []
-    for (let j = 0; j < 3; j++) {
-      const randomIndex = Math.floor(Math.random() * traits.length)
-      roleTraits.push(traits[randomIndex])
+    const data = await response.json()
+    console.log('[CharacterGenerator] LLM response:', data)
+    if (!response.ok || !data.success || !Array.isArray(data.candidates)) {
+      throw new Error(data.detail || data.message || '角色生成失败')
+    }
+    if (data.candidates.length === 0) {
+      throw new Error(data.message || '模型返回为空候选，请重试或检查提示词/模型配置')
     }
 
-    candidates.push({
+    const candidates = data.candidates.map((c, index) => ({
+      candidate_id: `candidate_${Date.now()}_${index}`,
       candidate_type: 'character',
-      name: names[Math.floor(Math.random() * names.length)],
-      role: roles[Math.floor(Math.random() * roles.length)],
-      agent_type: 'full_npc_agent',
+      name: c.name,
+      role: c.role,
+      agent_type: c.agent_type,
       narrative_function: 'connector',
-      summary: summaries[Math.floor(Math.random() * summaries.length)],
-      traits: [...new Set(roleTraits)],
-      goals: {
-        short_term: '找到案件的关键线索',
-        long_term: '查明当年事件的真相'
-      },
-      skills: {
-        observation: Math.floor(Math.random() * 40) + 60,
-        social: Math.floor(Math.random() * 40) + 60,
-        logic: Math.floor(Math.random() * 40) + 60,
-        courage: Math.floor(Math.random() * 40) + 60
-      },
-      generator: 'CharacterGenerator'
-    })
-  }
+      summary: c.backstory || '暂无简介',
+      traits: c.traits || [],
+      goals: c.goals || {},
+      skills: c.skills || {},
+      emotional_core: c.emotional_core || {},
+      generator: 'LLMCharacterGenerator',
+      status: 'pending',
+    }))
 
-  return candidates
+    generatorStore.addCandidates(candidates)
+    toast.add({
+      severity: 'success',
+      summary: '生成完成',
+      detail: `已生成 ${candidates.length} 个角色候选（LLM）`,
+      life: 3000
+    })
+    generatorStore.addLog(`LLM返回 ${candidates.length} 个角色候选`)
+  } catch (error) {
+    console.error('[CharacterGenerator] generate failed:', error)
+    const isTimeout = error?.name === 'AbortError'
+    toast.add({
+      severity: 'error',
+      summary: '生成失败',
+      detail: isTimeout
+        ? '请求超时（20秒），请检查后端 8421 端口和 LLM 服务是否可用'
+        : (error?.message || '请检查后端服务和 LLM 配置'),
+      life: 5000
+    })
+    generatorStore.addLog(`LLM生成失败: ${error?.message || 'unknown error'}`)
+  } finally {
+    clearTimeout(timeoutId)
+    generatorStore.setGenerating(false)
+  }
 }
 
 const editCharacter = (candidate) => {
@@ -340,6 +388,65 @@ const approveCharacter = (candidateId) => {
 const rejectCharacter = (candidateId) => {
   generatorStore.rejectCandidate(candidateId)
   toast.add({ severity: 'info', summary: '已拒绝', detail: '角色已从列表中移除', life: 3000 })
+}
+
+// 批量批准所有未批准的角色
+const batchApprove = () => {
+  const toApprove = characterCandidates.value
+    .filter(c => c.status !== 'approved')
+    .map(c => c.candidate_id)
+
+  if (toApprove.length === 0) {
+    toast.add({ severity: 'info', summary: '提示', detail: '没有需要批准的角色', life: 3000 })
+    return
+  }
+
+  generatorStore.batchApprove(toApprove)
+  toast.add({
+    severity: 'success',
+    summary: '批量批准成功',
+    detail: `已批准 ${toApprove.length} 个角色`,
+    life: 3000
+  })
+}
+
+// 批量入库所有已批准的角色
+const batchCommit = () => {
+  const toCommit = characterCandidates.value
+    .filter(c => c.status === 'approved')
+    .map(c => c.candidate_id)
+
+  if (toCommit.length === 0) {
+    toast.add({ severity: 'info', summary: '提示', detail: '没有已批准的角色可入库', life: 3000 })
+    return
+  }
+
+  generatorStore.batchCommit(toCommit)
+  toast.add({
+    severity: 'success',
+    summary: '批量入库成功',
+    detail: `已入库 ${toCommit.length} 个角色到世界配置`,
+    life: 3000
+  })
+}
+
+// 批量拒绝（清空所有候选）
+const batchReject = () => {
+  if (characterCandidates.value.length === 0) {
+    toast.add({ severity: 'info', summary: '提示', detail: '没有可清空的角色', life: 3000 })
+    return
+  }
+
+  const count = characterCandidates.value.length
+  const allIds = characterCandidates.value.map(c => c.candidate_id)
+  allIds.forEach(id => generatorStore.rejectCandidate(id))
+
+  toast.add({
+    severity: 'info',
+    summary: '清空成功',
+    detail: `已清除 ${count} 个角色候选`,
+    life: 3000
+  })
 }
 </script>
 

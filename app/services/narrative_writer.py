@@ -24,14 +24,14 @@ class NarrativeWriterService:
         self.event_svc = EventLogService()
         self.state_svc = WorldStateService()
 
-    def generate_chapter(self, sim_dir: Path, world: WorldConfig) -> None:
+    def generate_chapter(self, sim_dir: Path, world: WorldConfig, chapter_plan: Dict = None) -> None:
         state = self.state_svc.load(sim_dir)
         plot_events = self.event_svc.read_plot_events(sim_dir)
         if not plot_events:
             # fallback：取最后几条 raw 事件避免空稿
             plot_events = self.event_svc.read_all(sim_dir)[-8:]
 
-        plan = self._build_plan(state, world, plot_events)
+        plan = self._build_plan(state, world, plot_events, chapter_plan)
         (sim_dir / self.CHAPTER_PLAN_FILE).write_text(
             json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -39,13 +39,14 @@ class NarrativeWriterService:
         draft = self._write_draft(state, world, plot_events, plan)
         (sim_dir / self.CHAPTER_DRAFT_FILE).write_text(draft, encoding="utf-8")
 
-    def _build_plan(self, state: WorldState, world: WorldConfig, events: List[EventLog]) -> Dict:
+    def _build_plan(self, state: WorldState, world: WorldConfig, events: List[EventLog], chapter_plan: Dict = None) -> Dict:
         title = "入口区的回声"
         for e in events:
             if "锁" in e.result:
                 title = "生锈的新锁"
                 break
-        return {
+
+        plan = {
             "chapter": 1,
             "title": title,
             "pov": world.chapter_goal.pov,
@@ -53,6 +54,26 @@ class NarrativeWriterService:
             "core_events": [e.event_id for e in events],
             "ending_hook": "他忽然意识到：这里一定有人还在进出。",
         }
+
+        # V1.1 合并传入的 chapter_plan 中的新字段
+        if chapter_plan:
+            plan["clue_budget"] = chapter_plan.get("clue_budget", {})
+            plan["selected_clues"] = chapter_plan.get("selected_clues", [])
+            plan["reserved_clues"] = chapter_plan.get("reserved_clues", [])
+            plan["required_character_beats"] = chapter_plan.get("required_character_beats", [])
+            plan["opening_policy_applied"] = chapter_plan.get("opening_policy_applied", False)
+
+            # 使用 opening policy 生成的 ending_hook（如果有）
+            if chapter_plan.get("ending_hook"):
+                hook_spec = chapter_plan["ending_hook"]
+                if isinstance(hook_spec, dict) and hook_spec.get("type") == "subtle_anomaly":
+                    allowed_devices = hook_spec.get("allowed_devices", [])
+                    if allowed_devices:
+                        plan["ending_hook"] = allowed_devices[0]  # 使用第一个作为钩子
+                elif isinstance(hook_spec, str):
+                    plan["ending_hook"] = hook_spec
+
+        return plan
 
     def _write_draft(self, state: WorldState, world: WorldConfig, events: List[EventLog], plan: Dict) -> str:
         pov_id = world.chapter_goal.pov
@@ -67,6 +88,16 @@ class NarrativeWriterService:
         lines.append(meta)
         lines.append(f"# 第1章：{plan['title']}")
         lines.append("")
+
+        # V1.1 1) Required Character Beats - 主角情感动机展示
+        required_beats = plan.get("required_character_beats", [])
+        if required_beats:
+            for beat in required_beats:
+                beat_text = self._character_beat_to_text(pov_name, beat)
+                if beat_text:
+                    lines.append(beat_text)
+                    lines.append("")
+
         lines.append(f"{loc.public_description}")
         lines.append("")
 
@@ -77,9 +108,31 @@ class NarrativeWriterService:
         # 收束
         lines.append("他把那点不安压回喉咙里，像把一枚硬币塞进旧口袋。")
         lines.append("如果这里真的早已废弃，就不该留下这么多“新”的痕迹。")
-        lines.append(plan.get("ending_hook", ""))
+
+        # V1.1 3) Ending Hook - 结尾轻异常钩子
+        ending_hook = plan.get("ending_hook", "")
+        if ending_hook:
+            if isinstance(ending_hook, str):
+                lines.append(ending_hook)
+            elif isinstance(ending_hook, dict) and ending_hook.get("type") == "subtle_anomaly":
+                devices = ending_hook.get("allowed_devices", [])
+                if devices:
+                    lines.append(f"空气中忽然传来{devices[0]}——")
         lines.append("")
         return "\n".join([l for l in lines if l is not None])
+
+    def _character_beat_to_text(self, pov_name: str, beat: Dict) -> str:
+        """
+        V1.1 将角色情感 beat 转换为自然文本
+        """
+        beat_id = beat.get("beat_id", "")
+        content_hint = beat.get("content_hint", "")
+
+        if beat_id == "beat_last_call_memory":
+            return f"{pov_name}又想起了最后那通电话。敷衍的应答，匆忙的挂断——现在想起来，那或许是妹妹最后的求救信号。"
+        elif content_hint:
+            return f"{pov_name}想起了{content_hint}。"
+        return ""
 
     @staticmethod
     def _event_to_paragraph(pov_name: str, e: EventLog) -> str:

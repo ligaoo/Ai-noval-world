@@ -278,12 +278,63 @@ async def get_genre_profile(genre_id: str):
     return {"profile": profile.__dict__}
 
 
+class GenerateCharactersRequest(BaseModel):
+    world_id: str
+    count: int = 3
+    genre: str = "horror"
+
+
 class CreateWorldRequest(BaseModel):
     world_id: str
     title: str = "New World"
     genre: str = "horror"
     tone: str = ""
     era: str = "Modern"
+
+
+@app.post("/api/generate/characters")
+async def generate_characters(request: GenerateCharactersRequest):
+    """基于世界观背景使用 LLM 生成角色候选"""
+    try:
+        from app.services.llm_character_generator import (
+            LLMCharacterGenerator,
+            CharacterGenerationRequest,
+        )
+
+        generator = LLMCharacterGenerator(PROJECT_ROOT)
+
+        gen_request = CharacterGenerationRequest(
+            world_id=request.world_id,
+            count=request.count,
+            genre=request.genre,
+        )
+
+        candidates = generator.generate(gen_request)
+
+        # 转换为字典返回
+        result = []
+        for c in candidates:
+            result.append({
+                "character_id": c.character_id,
+                "name": c.name,
+                "role": c.role,
+                "agent_type": c.agent_type,
+                "traits": c.traits,
+                "goals": c.goals,
+                "skills": c.skills,
+                "backstory": c.backstory,
+                "emotional_core": c.emotional_core,
+            })
+
+        return {
+            "success": True,
+            "candidates": result,
+            "message": f"成功生成 {len(result)} 个角色候选",
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/worlds/create")

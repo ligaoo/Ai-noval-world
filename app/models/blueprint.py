@@ -91,6 +91,13 @@ class ChapterFunctionPlan:
     required_events: List[str] = field(default_factory=list)
     genre_context: Dict[str, Any] = field(default_factory=dict)
     must_not_reveal: List[str] = field(default_factory=list)
+    # V1.1 新增字段
+    clue_budget: Dict[str, Any] = field(default_factory=dict)
+    selected_clues: List[Dict[str, Any]] = field(default_factory=list)
+    reserved_clues: List[Dict[str, Any]] = field(default_factory=list)
+    required_character_beats: List[Dict[str, Any]] = field(default_factory=list)
+    ending_hook: Dict[str, Any] = field(default_factory=dict)
+    opening_policy_applied: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -104,6 +111,12 @@ class ChapterFunctionPlan:
             "required_events": self.required_events,
             "genre_context": self.genre_context,
             "must_not_reveal": self.must_not_reveal,
+            "clue_budget": self.clue_budget,
+            "selected_clues": self.selected_clues,
+            "reserved_clues": self.reserved_clues,
+            "required_character_beats": self.required_character_beats,
+            "ending_hook": self.ending_hook,
+            "opening_policy_applied": self.opening_policy_applied,
         }
 
 

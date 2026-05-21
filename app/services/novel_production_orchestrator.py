@@ -13,6 +13,8 @@ from app.models.blueprint import (
     NovelBlueprint,
     NovelProgress,
 )
+from app.services.opening_chapter_policy_service import OpeningChapterPolicyService
+from app.services.chapter_clue_budget_controller import ChapterClueBudgetController
 from app.services.trace_service import TraceService
 
 
@@ -144,10 +146,18 @@ class NovelProductionOrchestrator:
         self,
         project_dir: Path,
         blueprint: NovelBlueprint,
+        world_bible: Dict[str, Any],
+        quality_policy: Dict[str, Any],
+        characters: List[Dict[str, Any]],
+        available_clues: List[Dict[str, Any]] = None,
         trace_service: Optional[TraceService] = None,
     ):
         self.project_dir = project_dir
         self.blueprint = blueprint
+        self.world_bible = world_bible
+        self.quality_policy = quality_policy
+        self.characters = characters
+        self.available_clues = available_clues or []
         self.trace_service = trace_service
 
         self.production_dir = project_dir / "productions"
@@ -160,6 +170,15 @@ class NovelProductionOrchestrator:
         )
 
         self.chapter_function_resolver = ChapterFunctionResolver()
+
+        # V1.1 新增服务
+        self.opening_policy_service = OpeningChapterPolicyService(
+            quality_policy=quality_policy,
+            characters=characters,
+        )
+        self.clue_budget_controller = ChapterClueBudgetController(
+            quality_policy=quality_policy,
+        )
 
     def start_production(
         self,
@@ -242,10 +261,25 @@ class NovelProductionOrchestrator:
             self.progress,
         )
 
-        # 2. 生成章节
+        # V1.1 2. 应用第一章策略（如果是第一章）
+        chapter_plan = chapter_function.to_dict()
+        if chapter_no == 1:
+            chapter_plan = self.opening_policy_service.apply(
+                chapter_plan=chapter_plan,
+                world_bible=self.world_bible,
+            )
+
+        # V1.1 3. 应用线索预算
+        chapter_plan = self.clue_budget_controller.apply(
+            chapter_plan=chapter_plan,
+            available_clues=self.available_clues,
+        )
+
+        # 4. 生成章节（传入增强后的 chapter_plan）
         chapter_result = chapter_generator(
             chapter_no=chapter_no,
             chapter_function=chapter_function,
+            chapter_plan=chapter_plan,
         )
 
         if not chapter_result.get("success"):

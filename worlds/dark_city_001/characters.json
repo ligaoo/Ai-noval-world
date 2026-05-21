@@ -20,7 +20,20 @@
         "observation": 75,
         "social": 40,
         "logic": 70
-      }
+      },
+      "emotional_core": {
+        "guilt_source": "林舟曾经没有相信林雪关于旧医院的求助",
+        "last_contact": "林雪最后一次打电话说旧医院真的有人进去过，林舟敷衍了她",
+        "current_drive": "他不是单纯想找妹妹，而是想弥补自己当时的忽视"
+      },
+      "required_early_beats": [
+        {
+          "beat_id": "beat_last_call_memory",
+          "target_chapter": 1,
+          "function": "让读者理解林舟的愧疚",
+          "must_include": true
+        }
+      ]
     },
     {
       "id": "char_guard",

@@ -122,7 +122,7 @@ export const useGeneratorStore = defineStore('generator', () => {
       const type = candidate.candidate_type
       
       if (type === 'character') {
-        const chars = worldStore.characters.value
+        const chars = worldStore.characters
         const exists = chars.some(c => c.character_id === candidate.character_id || c.name === candidate.name)
         if (!exists) {
           const newChar = {
@@ -141,7 +141,7 @@ export const useGeneratorStore = defineStore('generator', () => {
           addLog(`⚠️ 角色已存在，跳过入库: ${candidate.name}`)
         }
       } else if (type === 'npc') {
-        const chars = worldStore.characters.value
+        const chars = worldStore.characters
         const exists = chars.some(c => c.character_id === candidate.character_id || c.name === candidate.name)
         if (!exists) {
           const newNpc = {
@@ -161,7 +161,7 @@ export const useGeneratorStore = defineStore('generator', () => {
           addLog(`⚠️ NPC 已存在，跳过入库: ${candidate.name}`)
         }
       } else if (type === 'location') {
-        const locs = worldStore.locations.value
+        const locs = worldStore.locations
         const exists = locs.some(l => l.location_id === candidate.location_id || l.name === candidate.name)
         if (!exists) {
           const newLoc = {
@@ -176,7 +176,7 @@ export const useGeneratorStore = defineStore('generator', () => {
           addLog(`✅ 已添加地点到世界配置: ${newLoc.name}`)
         }
       } else if (type === 'clue') {
-        const cls = worldStore.clues.value
+        const cls = worldStore.clues
         const exists = cls.some(c => c.clue_id === candidate.clue_id || c.name === candidate.name)
         if (!exists) {
           const newClue = {

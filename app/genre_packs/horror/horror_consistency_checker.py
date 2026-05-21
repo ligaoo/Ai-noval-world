@@ -42,6 +42,12 @@ class HorrorConsistencyChecker(BaseGenreConsistencyChecker):
         intensity_warnings = self._check_intensity_progression(chapter_draft, genre_context)
         warnings.extend(intensity_warnings)
 
+        # V1.1 新增：第一章特定检查
+        chapter_no = chapter_plan.get("chapter_no", 1)
+        if chapter_no == 1:
+            chapter1_violations = self._check_chapter1_constraints(chapter_draft, chapter_plan)
+            violations.extend(chapter1_violations)
+
         return GenreValidationResult(
             passed=len([v for v in violations if v.get("severity") == "error"]) == 0,
             violations=violations,
@@ -151,3 +157,86 @@ class HorrorConsistencyChecker(BaseGenreConsistencyChecker):
             })
 
         return warnings
+
+    # V1.1 新增：第一章特定约束检查
+    def _check_chapter1_constraints(
+        self,
+        draft: str,
+        chapter_plan: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        第一章特定约束检查
+        - 不能出现强灵异/直接攻击
+        - 不能解释完整规则
+        - 必须有轻异常钩子（结尾）
+        """
+        violations = []
+
+        # 1. 检查是否出现过强灵异（直接攻击、鬼怪露面）
+        strong_encounter_patterns = [
+            "扑过来", "冲过来", "抓", "咬", "掐住",
+            "鬼怪", "鬼出现", "看到了鬼", "怪物",
+            "鲜血淋漓", "血肉模糊", "尸体"
+        ]
+
+        for pattern in strong_encounter_patterns:
+            if pattern in draft:
+                violations.append({
+                    "type": "chapter1_too_strong_horror",
+                    "message": f"第一章出现过强的灵异元素：'{pattern}'，第一章应只建立轻微异常感",
+                    "severity": "error",
+                    "pattern": pattern,
+                })
+
+        # 2. 检查是否过早解释完整规则
+        rule_explanation_patterns = [
+            "规则就是", "原来是这样", "只要", "就不会",
+            "所以说", "这就是为什么", "原来如此"
+        ]
+
+        explanation_count = sum(1 for p in rule_explanation_patterns if p in draft)
+        if explanation_count >= 2:
+            violations.append({
+                "type": "chapter1_premature_rule_explanation",
+                "message": f"第一章过早解释灵异规则（检测到{explanation_count}处解释性语句）",
+                "severity": "error",
+            })
+
+        # 3. 检查结尾是否有轻异常钩子
+        ending_text = draft[-300:] if len(draft) > 300 else draft
+
+        subtle_hook_patterns = [
+            "声音", "冷", "影子", "不对", "奇怪", "错觉",
+            "好像", "似乎", "仿佛", "动了", "变了",
+        ]
+
+        hook_found = any(p in ending_text for p in subtle_hook_patterns)
+
+        # 从配置中获取第一章要求
+        chapter1_config = None
+        for stage in self.progression_curve:
+            if stage.get("stage_id") == "subtle_anomaly":
+                chapter1_config = stage.get("chapter1_specific", {})
+                break
+
+        if chapter1_config and chapter1_config.get("required_ending_hook"):
+            if not hook_found:
+                violations.append({
+                    "type": "chapter1_missing_subtle_hook",
+                    "message": "第一章结尾缺少轻异常钩子，建议添加轻微的不安感描写",
+                    "severity": "warning",
+                })
+
+        # 4. 第一章强度限制
+        max_chapter1_intensity = chapter1_config.get("max_horror_intensity", 2) if chapter1_config else 2
+        strong_horror_words = ["崩溃", "尖叫", "惨死", "鲜血", "恐怖", "吓死"]
+        actual_intensity = sum(1 for w in strong_horror_words if w in draft)
+
+        if actual_intensity > max_chapter1_intensity:
+            violations.append({
+                "type": "chapter1_intensity_exceeded",
+                "message": f"第一章恐怖强度过高，实际{actual_intensity}，限制{max_chapter1_intensity}",
+                "severity": "warning",
+            })
+
+        return violations
