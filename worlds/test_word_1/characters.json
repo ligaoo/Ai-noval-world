@@ -1,0 +1,24 @@
+{
+  "characters": [
+    {
+      "id": "char_protagonist",
+      "name": "Protagonist",
+      "role": "protagonist",
+      "personality": {
+        "traits": [
+          "Brave",
+          "Curious"
+        ]
+      },
+      "goals": {
+        "short_term": "Discover the truth",
+        "long_term": "Find peace"
+      },
+      "skills": {
+        "observation": 70,
+        "logic": 65
+      },
+      "initial_location": "location_001"
+    }
+  ]
+}

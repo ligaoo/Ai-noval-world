@@ -1,0 +1,24 @@
+{
+  "locations": [
+    {
+      "id": "location_001",
+      "name": "Starting Point",
+      "public_description": "The place where the story begins.",
+      "objects": [],
+      "connected_to": [
+        "location_002"
+      ],
+      "danger_level": 1
+    },
+    {
+      "id": "location_002",
+      "name": "Mysterious Place",
+      "public_description": "A place full of mysteries.",
+      "objects": [],
+      "connected_to": [
+        "location_001"
+      ],
+      "danger_level": 2
+    }
+  ]
+}

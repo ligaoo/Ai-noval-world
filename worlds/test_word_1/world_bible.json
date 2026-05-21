@@ -1,0 +1,14 @@
+{
+  "world_id": "test_word_1",
+  "title": "噩梦惊袭1",
+  "genre": "horror",
+  "tone": "压抑，恐怖，绝望",
+  "era": "Modern",
+  "rules": [
+    "Add your world rules here"
+  ],
+  "themes": [
+    "Theme 1",
+    "Theme 2"
+  ]
+}

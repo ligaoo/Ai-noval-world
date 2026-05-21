@@ -1,0 +1,20 @@
+{
+  "clues": [
+    {
+      "id": "clue_001",
+      "name": "First Clue",
+      "content": "This is the first clue to start your story.",
+      "truth_level": "hidden_fact",
+      "importance": 50,
+      "discover_routes": [],
+      "on_discovered": {
+        "add_known_fact_to": "discoverer",
+        "plot_value": {
+          "mystery": 10,
+          "progress": 10,
+          "conflict": 5
+        }
+      }
+    }
+  ]
+}

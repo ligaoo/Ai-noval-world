@@ -507,22 +507,13 @@ const createNewWorld = async () => {
 }
 
 // 确保 worldBible 始终是一个有效对象，防止 v-model 绑定到临时空对象导致数据丢失
-const worldBible = computed(() => {
-  if (!worldStore.worldBible) {
-    worldStore.worldBible = {
-      world_id: 'dark_city_001',
-      title: '旧医院真相',
-      genre: '悬疑灵异',
-      tone: '克制、压抑、现实中透出诡异',
-      era: '现代都市',
-      rules: [
-        '旧医院午夜后才会出现四楼',
-        '看门人害怕惹事，不会主动说出完整真相',
-      ],
-      themes: ['记忆是否可靠', '人如何逃避愧疚'],
-    }
+const worldBible = computed({
+  get() {
+    return worldStore.worldBible || {}
+  },
+  set(value) {
+    worldStore.worldBible = value
   }
-  return worldStore.worldBible
 })
 
 const plotArcIdsText = computed({
@@ -555,8 +546,22 @@ const applyPlotArcIdsFromText = (event) => {
 // 初始化加载
 onMounted(async () => {
   await loadWorldsList()
-  
-  if (!worldStore.worldBible && availableWorlds.value.length > 0) {
+
+  // 同步 localStorage 中的 world_id 与下拉框选中状态
+  const storedWorldId = worldStore.worldBible?.world_id
+  if (storedWorldId) {
+    // 如果 localStorage 中有世界数据，检查是否在可用列表中
+    const worldExists = availableWorlds.value.some(w => w.id === storedWorldId)
+    if (worldExists) {
+      // 如果存在，选中该世界
+      selectedWorldId.value = storedWorldId
+    } else if (availableWorlds.value.length > 0) {
+      // 如果不存在（数据被删除），选中第一个可用世界并加载
+      selectedWorldId.value = availableWorlds.value[0].id
+      await loadSelectedWorld()
+    }
+  } else if (availableWorlds.value.length > 0) {
+    // 如果没有存储数据，选中第一个可用世界并加载
     selectedWorldId.value = availableWorlds.value[0].id
     await loadSelectedWorld()
   }
@@ -614,6 +619,14 @@ const startSimulation = async () => {
   simulationResult.value = null
 
   try {
+    // 使用当前选中的 world_id，优先级：selectedWorldId > worldBible.world_id
+    const currentWorldId = selectedWorldId.value || worldBible.value.world_id
+    if (!currentWorldId) {
+      alert('请先选择一个世界')
+      isSimulating.value = false
+      return
+    }
+
     // 1. 启动模拟
     const response = await fetch('http://localhost:8421/api/simulations/run', {
       method: 'POST',
@@ -621,7 +634,7 @@ const startSimulation = async () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        world_id: worldBible.value.world_id,
+        world_id: currentWorldId,
         mode: 'llm',
         v2_phase: 'v2.3',
         seed: 12345,

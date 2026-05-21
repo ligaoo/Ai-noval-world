@@ -1,0 +1,6 @@
+{
+  "min_characters": 2,
+  "min_locations": 2,
+  "min_clues": 3,
+  "quality_threshold": 70
+}

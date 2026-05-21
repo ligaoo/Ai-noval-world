@@ -1,0 +1,8 @@
+{
+  "goal": "Setup the story",
+  "pov": "char_protagonist",
+  "start_time": "day1_08:00",
+  "target_progress": 100,
+  "tick_limit": 30,
+  "no_progress_limit": 4
+}

@@ -2,10 +2,23 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 
 export const useWorldStore = defineStore('world', () => {
-  // 状态初始化：尝试从 localStorage 读取
+  // 状态初始化：尝试从 localStorage 读取（添加版本号，防止旧数据冲突）
+  const STORE_VERSION = '1.0.1'
   const loadState = () => {
     const saved = localStorage.getItem('novel_world_store')
-    return saved ? JSON.parse(saved) : null
+    if (!saved) return null
+
+    try {
+      const parsed = JSON.parse(saved)
+      // 如果版本不匹配，丢弃旧数据
+      if (parsed._version !== STORE_VERSION) {
+        console.log('Store version mismatch, discarding old data')
+        return null
+      }
+      return parsed
+    } catch {
+      return null
+    }
   }
 
   const savedState = loadState()
@@ -21,6 +34,7 @@ export const useWorldStore = defineStore('world', () => {
   // 自动保存至 localStorage
   const saveToStorage = () => {
     localStorage.setItem('novel_world_store', JSON.stringify({
+      _version: STORE_VERSION,
       worldId: worldId.value,
       worldBible: worldBible.value,
       characters: characters.value,
