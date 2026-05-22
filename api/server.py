@@ -52,6 +52,18 @@ class SimulationRequest(BaseModel):
     chapter_no: int = 1
 
 
+class BootstrapRequest(BaseModel):
+    user_seed: str
+    target_genre: str = "horror_suspense"
+    target_words: int = 100000
+    auto_confirm: bool = False
+    world_id: Optional[str] = None
+
+
+# Bootstrap 候选存储（内存级；写盘后可重建）
+bootstrap_candidates: Dict[str, Dict] = {}
+
+
 @app.get("/")
 async def root():
     return {
@@ -465,6 +477,192 @@ async def create_world(request: CreateWorldRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Story Bootstrap APIs（V1 自动补全 / 22 章）
+# ============================================================
+def _build_bootstrapper():
+    """构造 StoryBootstrapper（带 LLM 客户端，若可用）"""
+    from app.bootstrap import StoryBootstrapper
+    from app.config import Config
+
+    cfg = Config(PROJECT_ROOT)
+    llm_client = None
+    if cfg.is_llm_available():
+        try:
+            from app.llm_client import OpenAICompatibleClient
+            llm_client = OpenAICompatibleClient.from_config(PROJECT_ROOT)
+        except Exception:
+            llm_client = None
+    return StoryBootstrapper(PROJECT_ROOT, llm_client=llm_client)
+
+
+def _load_bootstrap_result_from_disk(bootstrap_id: str):
+    from app.bootstrap import BootstrapResult
+
+    if not WORLDS_DIR.exists():
+        return None, None
+    for world_dir in WORLDS_DIR.iterdir():
+        if not world_dir.is_dir():
+            continue
+        result_file = world_dir / "bootstrap_result.json"
+        if not result_file.exists():
+            continue
+        data = json.loads(result_file.read_text(encoding="utf-8"))
+        if data.get("bootstrap_id") == bootstrap_id:
+            return BootstrapResult.model_validate(data), world_dir
+    return None, None
+
+
+def _load_bootstrap_manifest_from_disk(bootstrap_id: str):
+    if not WORLDS_DIR.exists():
+        return None, None
+    for world_dir in WORLDS_DIR.iterdir():
+        if not world_dir.is_dir():
+            continue
+        manifest = world_dir / "bootstrap_manifest.json"
+        if not manifest.exists():
+            continue
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if data.get("bootstrap_id") == bootstrap_id:
+            return data, world_dir
+    return None, None
+
+
+def _get_bootstrap_entry(bootstrap_id: str):
+    if bootstrap_id in bootstrap_candidates:
+        return bootstrap_candidates[bootstrap_id]
+
+    result, _ = _load_bootstrap_result_from_disk(bootstrap_id)
+    if result:
+        bootstrapper = _build_bootstrapper()
+        bootstrap_candidates[bootstrap_id] = {
+            "result": result,
+            "bootstrapper_ref": bootstrapper,
+        }
+        return bootstrap_candidates[bootstrap_id]
+    return None
+
+
+@app.post("/api/story/bootstrap")
+async def create_story_bootstrap(request: BootstrapRequest):
+    """
+    输入一句模糊设定 → 自动补全完整世界候选（不直接覆盖现有 worlds 目录）
+    """
+    try:
+        from app.bootstrap import BootstrapSeed
+
+        bootstrapper = _build_bootstrapper()
+        seed = BootstrapSeed(
+            user_seed=request.user_seed,
+            target_genre=request.target_genre,
+            target_words=request.target_words,
+            auto_confirm=request.auto_confirm,
+        )
+        result = bootstrapper.bootstrap(seed, world_id=request.world_id)
+
+        # 候选缓存
+        bootstrap_candidates[result.bootstrap_id] = {
+            "result": result,
+            "bootstrapper_ref": bootstrapper,
+        }
+
+        # 如果 auto_confirm，立即写盘
+        if request.auto_confirm and result.validation and result.validation.passed:
+            result.status = "confirmed"
+            bootstrapper.write_to_worlds_dir(result)
+
+        return {
+            "bootstrap_id": result.bootstrap_id,
+            "world_id": result.world_id,
+            "status": result.status,
+            "title": result.title,
+            "summary": result.summary_dict(),
+            "validation": result.validation.model_dump() if result.validation else None,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/story/bootstrap/{bootstrap_id}")
+async def get_story_bootstrap(bootstrap_id: str):
+    """查看候选完整内容"""
+    entry = _get_bootstrap_entry(bootstrap_id)
+    if entry:
+        return entry["result"].model_dump(mode="json")
+
+    manifest, _ = _load_bootstrap_manifest_from_disk(bootstrap_id)
+    if manifest:
+        return manifest
+    raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
+
+
+@app.post("/api/story/bootstrap/{bootstrap_id}/confirm")
+async def confirm_story_bootstrap(bootstrap_id: str):
+    """确认候选并写入 worlds/<world_id>/"""
+    entry = _get_bootstrap_entry(bootstrap_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
+
+    result = entry["result"]
+    bootstrapper = entry["bootstrapper_ref"]
+
+    if result.validation and not result.validation.passed:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Bootstrap 校验未通过，无法确认。",
+                "issues": [i.model_dump() for i in result.validation.issues],
+            },
+        )
+
+    result.status = "confirmed"
+    world_dir = bootstrapper.write_to_worlds_dir(result)
+    return {
+        "success": True,
+        "world_id": result.world_id,
+        "world_dir": str(world_dir),
+        "summary": result.summary_dict(),
+    }
+
+
+@app.post("/api/story/bootstrap/{bootstrap_id}/start")
+async def start_story_bootstrap(bootstrap_id: str):
+    """确认 + 立即启动一次模拟"""
+    entry = _get_bootstrap_entry(bootstrap_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
+
+    result = entry["result"]
+    bootstrapper = entry["bootstrapper_ref"]
+
+    if result.validation and not result.validation.passed:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Bootstrap 校验未通过，无法启动模拟。",
+                "issues": [i.model_dump() for i in result.validation.issues],
+            },
+        )
+
+    # 1) 写盘
+    result.status = "confirmed"
+    bootstrapper.write_to_worlds_dir(result)
+
+    # 2) 启动模拟（复用现有 run_simulation 路径）
+    sim_request = SimulationRequest(
+        world_id=result.world_id,
+        mode="llm",
+        v2_phase="v2.3",
+        seed=12345,
+        genre_id=(result.world_bible.get("genre") or "horror"),
+        target_chapters=10,
+        chapter_no=1,
+    )
+    return await run_simulation(sim_request)
 
 
 if __name__ == "__main__":

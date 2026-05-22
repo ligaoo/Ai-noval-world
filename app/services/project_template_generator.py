@@ -16,15 +16,7 @@ from app.services.trace_service import TraceService
 class ProjectTemplateGenerator:
     """
     V5.6 项目模板生成器
-    用户输入简单想法，系统生成完整结构化项目模板
-    - 生成世界圣经
-    - 生成角色设定
-    - 生成地图节点
-    - 生成主线剧情弧
-    - 生成线索网络
-    - 生成人物弧
-    - 生成文风圣经
-    - 生成章节种子
+    用户输入简单想法，系统生成完整结构化项目模板。
     """
 
     def __init__(
@@ -43,8 +35,7 @@ class ProjectTemplateGenerator:
         self,
         request: TemplateGenerationRequest,
     ) -> ProjectTemplate:
-        """生成项目模板"""
-        template_id = f"tpl_{request.genre[:2]}_{request.theme[:2]}_{hash(request.protagonist_seed) % 1000:03d}"
+        template_id = f"tpl_{request.genre[:2]}_{request.theme[:2]}_{abs(hash(request.protagonist_seed)) % 1000:03d}"
 
         world_bible = self._generate_world_bible(request)
         characters = self._generate_characters(request)
@@ -80,281 +71,258 @@ class ProjectTemplateGenerator:
         return template
 
     def _generate_world_bible(self, request: TemplateGenerationRequest) -> Dict[str, Any]:
-        """生成世界圣经"""
         return {
-            "world_name": f"{request.core_location}的秘密",
+            "world_name": f"{request.core_location}边界",
             "genre": request.genre,
             "theme": request.theme,
             "time_period": "现代",
             "location": request.core_location,
             "atmosphere": request.tone,
-            "core_concept": f"一个关于{request.protagonist_seed}在{request.core_location}中探索真相的故事",
+            "core_concept": f"{request.protagonist_seed}在{request.core_location}中通过可验证线索理解异常规则与个人代价",
             "world_rules": [
-                "过去不会轻易被遗忘",
-                "每个角落都可能藏着秘密",
-                "记忆可能是不可靠的",
-                "真相往往比想象的更残酷",
+                f"{request.core_location}中的异常只能通过行动和线索逐步验证",
+                "隐藏行动者不会主动暴露完整目的，只会留下可追踪后果",
+                "角色的选择会改变后续线索出现顺序",
+                "最终真相必须由多条证据交叉支撑",
             ],
             "historical_events": [
-                "十年前发生了一起神秘事件",
-                "医院因为不明原因被废弃",
-                "有传言说这里进行过非法实验",
+                "核心异常首次留下可追踪痕迹",
+                "近期出现与既有认知矛盾的新变化",
+                "主角进入现场并触发第一组可验证线索",
             ],
+            "preferred_elements": request.preferred_elements,
+            "forbidden_elements": request.forbidden_elements,
         }
 
     def _generate_characters(self, request: TemplateGenerationRequest) -> List[Dict[str, Any]]:
-        """生成核心角色"""
         return [
             {
                 "character_id": "protagonist_001",
-                "name": "林舟",
+                "name": "主角",
                 "role": "主角",
                 "description": request.protagonist_seed,
-                "background": "十年前的事件后失去了部分记忆",
-                "motivation": "寻找失去的记忆，揭开过去的真相",
-                "personality_traits": ["内向", "细心", "坚韧", "有些偏执"],
+                "background": f"因个人目标被卷入{request.core_location}的异常处境",
+                "motivation": f"在{request.core_location}中确认真相并承担相应代价",
+                "personality_traits": ["警觉", "克制", "重视证据", "不轻信"],
                 "relationships": {},
-                "location_id": "old_hospital_gate",
+                "location_id": "location_gate",
             },
             {
-                "character_id": "antagonist_001",
-                "name": "看守人",
+                "character_id": "obstructor_001",
+                "name": "阻碍者",
                 "role": "阻碍者",
-                "description": "废弃医院的神秘看守人",
-                "background": "似乎与十年前的事件有关",
-                "motivation": "阻止主角发现真相",
-                "personality_traits": ["沉默", "警觉", "忠诚"],
+                "description": f"与{request.core_location}存在利益或秘密关联的人物",
+                "background": "知道部分规则，但不愿主动说明完整事实",
+                "motivation": "阻止主角过早接触核心真相",
+                "personality_traits": ["谨慎", "警惕", "回避关键问题"],
                 "relationships": {},
-                "location_id": "guard_room",
+                "location_id": "location_frontdesk",
             },
         ]
 
     def _generate_npcs(self, request: TemplateGenerationRequest) -> List[Dict[str, Any]]:
-        """生成NPC"""
         return [
             {
                 "npc_id": "npc_witness_001",
-                "name": "老陈",
+                "name": "目击者",
                 "role": "目击者",
-                "description": "住在医院附近的老人",
-                "background": "见证了医院被废弃的过程",
+                "description": f"能从外围观察{request.core_location}变化的人",
+                "background": "只掌握局部事实，担心卷入风险",
                 "knowledge_level": "partial",
-                "can_reveal_clues": ["clue_history_001"],
-                "location_id": "nearby_shop",
+                "can_reveal_clues": ["clue_trace_001"],
+                "location_id": "location_witness_point",
             },
             {
-                "npc_id": "npc_ghost_001",
-                "name": "幻影",
-                "role": "线索提供者",
-                "description": "偶尔出现在医院中的神秘身影",
-                "background": "可能是过去的残影",
+                "npc_id": "npc_hidden_actor_001",
+                "name": "隐藏行动者",
+                "role": "隐藏行动者",
+                "description": "通过痕迹和后果影响主线的人物或力量",
+                "background": "与核心异常的运行机制存在关联",
                 "knowledge_level": "fragmented",
-                "can_reveal_clues": ["clue_memory_001"],
-                "location_id": "basement_corridor",
+                "can_reveal_clues": ["clue_hidden_actor_001"],
+                "location_id": "location_inner",
             },
         ]
 
     def _generate_map(self, request: TemplateGenerationRequest) -> Dict[str, Any]:
-        """生成地图"""
+        core = request.core_location
         return {
             "locations": [
                 {
-                    "location_id": "old_hospital_gate",
-                    "name": "旧医院大门",
-                    "description": "生锈的铁门上挂着一把大锁",
+                    "location_id": "location_gate",
+                    "name": f"{core}入口",
+                    "description": "连接外部和核心区域的边界，状态与表面认知不完全一致",
                     "type": "entrance",
-                    "connections": ["entrance_hall"],
-                    "clues": ["clue_lock_001"],
+                    "connections": ["location_frontdesk"],
+                    "clues": ["clue_boundary_001"],
                 },
                 {
-                    "location_id": "entrance_hall",
-                    "name": "入口大厅",
-                    "description": "阴暗潮湿，空气中弥漫着旧消毒水的味道",
+                    "location_id": "location_frontdesk",
+                    "name": f"{core}前区",
+                    "description": "最先接触到规则异常和人物冲突的公共区域",
                     "type": "main_area",
-                    "connections": ["old_hospital_gate", "ward_corridor", "nurse_station"],
-                    "clues": ["clue_logbook_001"],
+                    "connections": ["location_gate", "location_hallway", "location_witness_point"],
+                    "clues": ["clue_record_001"],
                 },
                 {
-                    "location_id": "ward_corridor",
-                    "name": "病房走廊",
-                    "description": "两侧是关着门的病房，偶尔传来轻微的声响",
+                    "location_id": "location_hallway",
+                    "name": f"{core}内部通道",
+                    "description": "通向更深区域的路径，残留近期行动痕迹",
                     "type": "corridor",
-                    "connections": ["entrance_hall", "room_302", "basement_stairs"],
-                    "clues": ["clue_footprints_001"],
+                    "connections": ["location_frontdesk", "location_archive", "location_deep"],
+                    "clues": ["clue_trace_001"],
                 },
                 {
-                    "location_id": "nurse_station",
-                    "name": "护士站",
-                    "description": "桌上散落着旧病历和被遗弃的医疗用品",
+                    "location_id": "location_archive",
+                    "name": f"{core}记录区",
+                    "description": "保存旧记录或遗留信息的位置，部分内容出现缺口",
                     "type": "clue_room",
-                    "connections": ["entrance_hall"],
-                    "clues": ["clue_medical_records_001"],
+                    "connections": ["location_hallway"],
+                    "clues": ["clue_record_gap_001"],
                 },
                 {
-                    "location_id": "room_302",
-                    "name": "302病房",
-                    "description": "似乎是主角曾经住过的房间",
-                    "type": "personal_room",
-                    "connections": ["ward_corridor"],
-                    "clues": ["clue_personal_item_001"],
+                    "location_id": "location_deep",
+                    "name": f"{core}深处",
+                    "description": "异常反馈更强的高风险区域",
+                    "type": "danger_zone",
+                    "connections": ["location_hallway", "location_inner"],
+                    "clues": ["clue_rule_001"],
                 },
                 {
-                    "location_id": "basement_stairs",
-                    "name": "地下室楼梯",
-                    "description": "通往地下室的楼梯，楼梯口有一道铁门",
-                    "type": "transition",
-                    "connections": ["ward_corridor", "basement_corridor"],
-                    "clues": ["clue_basement_key_001"],
+                    "location_id": "location_inner",
+                    "name": f"{core}隐藏区域",
+                    "description": "不在普通路径上，只通过线索和后果逐渐显现",
+                    "type": "hidden_area",
+                    "connections": ["location_deep"],
+                    "clues": ["clue_hidden_actor_001"],
                 },
                 {
-                    "location_id": "basement_corridor",
-                    "name": "地下室走廊",
-                    "description": "最深处隐藏着十年前的真相",
-                    "type": "truth_room",
-                    "connections": ["basement_stairs", "hidden_room"],
-                    "clues": ["clue_experiment_001"],
-                },
-                {
-                    "location_id": "hidden_room",
-                    "name": "密室",
-                    "description": "真相所在的地方",
-                    "type": "final_room",
-                    "connections": ["basement_corridor"],
-                    "clues": ["clue_truth_001"],
-                },
-                {
-                    "location_id": "guard_room",
-                    "name": "看守人房间",
-                    "description": "看守人居住的地方",
+                    "location_id": "location_witness_point",
+                    "name": f"{core}外围观察点",
+                    "description": "能从外部角度验证核心区域变化的位置",
                     "type": "npc_room",
-                    "connections": ["entrance_hall"],
-                    "clues": [],
-                },
-                {
-                    "location_id": "nearby_shop",
-                    "name": "附近的小店",
-                    "description": "医院附近的杂货店",
-                    "type": "npc_room",
-                    "connections": [],
+                    "connections": ["location_frontdesk"],
                     "clues": [],
                 },
             ],
-            "starting_location": "old_hospital_gate",
+            "starting_location": "location_gate",
         }
 
     def _generate_clues(self, request: TemplateGenerationRequest) -> List[Dict[str, Any]]:
-        """生成线索"""
+        core = request.core_location
         return [
             {
-                "clue_id": "clue_lock_001",
-                "name": "新锁",
-                "description": "大门上的锁看起来很新，不像放了十年的样子",
+                "clue_id": "clue_boundary_001",
+                "name": "边界异常痕迹",
+                "description": f"{core}入口附近出现与正常环境不符的近期改动",
                 "reveal_stage": 1,
                 "discover_routes": [
-                    {"location": "old_hospital_gate", "method": "inspect"},
+                    {"location": "location_gate", "method": "inspect"},
+                    {"location": "location_frontdesk", "method": "observe"},
+                    {"npc": "npc_witness_001", "method": "talk"},
                 ],
             },
             {
-                "clue_id": "clue_logbook_001",
-                "name": "访客记录",
-                "description": "最后一页有被撕掉的痕迹",
+                "clue_id": "clue_record_001",
+                "name": "近期接触记录",
+                "description": "现场存在近期被接触或整理过的记录痕迹",
                 "reveal_stage": 2,
                 "discover_routes": [
-                    {"location": "entrance_hall", "method": "search"},
+                    {"location": "location_frontdesk", "method": "search"},
+                    {"location": "location_archive", "method": "inspect"},
+                    {"npc": "obstructor_001", "method": "talk"},
                 ],
             },
             {
-                "clue_id": "clue_footprints_001",
-                "name": "新鲜脚印",
-                "description": "走廊地上有新鲜的脚印",
+                "clue_id": "clue_trace_001",
+                "name": "未知行动痕迹",
+                "description": "不属于当前可见角色的行动痕迹指向更深处",
                 "reveal_stage": 2,
                 "discover_routes": [
-                    {"location": "ward_corridor", "method": "observe"},
+                    {"location": "location_hallway", "method": "observe"},
+                    {"location": "location_hallway", "method": "inspect"},
+                    {"npc": "npc_witness_001", "method": "talk"},
                 ],
             },
             {
-                "clue_id": "clue_medical_records_001",
-                "name": "医疗记录",
-                "description": "有一份主角的医疗记录，但关键信息被涂黑",
+                "clue_id": "clue_record_gap_001",
+                "name": "记录缺口",
+                "description": "关键记录被移动、替换或隐藏，说明有人干预线索顺序",
                 "reveal_stage": 3,
                 "discover_routes": [
-                    {"location": "nurse_station", "method": "search"},
-                    {"npc": "npc_witness_001", "method": "talk"},
+                    {"location": "location_archive", "method": "search"},
+                    {"location": "location_frontdesk", "method": "search"},
+                    {"npc": "obstructor_001", "method": "talk"},
                 ],
             },
             {
-                "clue_id": "clue_personal_item_001",
-                "name": "旧照片",
-                "description": "病房里有一张主角和某人的合影",
-                "reveal_stage": 4,
-                "discover_routes": [
-                    {"location": "room_302", "method": "search"},
-                ],
-            },
-            {
-                "clue_id": "clue_basement_key_001",
-                "name": "地下室钥匙",
-                "description": "一把生锈的钥匙",
+                "clue_id": "clue_rule_001",
+                "name": "异常规则证据",
+                "description": "多个细节共同指向同一套可验证的异常规则",
                 "reveal_stage": 5,
                 "discover_routes": [
-                    {"location": "nurse_station", "method": "search"},
-                    {"npc": "npc_witness_001", "method": "talk"},
+                    {"location": "location_deep", "method": "inspect"},
+                    {"location": "location_archive", "method": "search"},
+                    {"npc": "npc_hidden_actor_001", "method": "trace"},
                 ],
             },
             {
-                "clue_id": "clue_experiment_001",
-                "name": "实验记录",
-                "description": "关于非法实验的记录",
+                "clue_id": "clue_hidden_actor_001",
+                "name": "隐藏行动者痕迹",
+                "description": "线索出现顺序被人为或异常力量改变过",
                 "reveal_stage": 6,
                 "discover_routes": [
-                    {"location": "basement_corridor", "method": "search"},
+                    {"location": "location_inner", "method": "inspect"},
+                    {"location": "location_deep", "method": "observe"},
+                    {"npc": "npc_hidden_actor_001", "method": "trace"},
                 ],
             },
             {
                 "clue_id": "clue_truth_001",
-                "name": "真相",
-                "description": "主角自己就是当年的实验对象",
-                "reveal_stage": 7,
+                "name": "核心真相证据",
+                "description": "足以解释核心异常来源和角色代价的最终证据",
+                "reveal_stage": 8,
                 "discover_routes": [
-                    {"location": "hidden_room", "method": "inspect"},
+                    {"location": "location_inner", "method": "inspect"},
+                    {"location": "location_deep", "method": "search"},
+                    {"location": "location_archive", "method": "synthesize"},
                 ],
             },
         ]
 
     def _generate_plot_arcs(self, request: TemplateGenerationRequest) -> List[Dict[str, Any]]:
-        """生成剧情弧"""
         return [
             {
                 "arc_id": "main_arc_001",
-                "name": "揭开真相",
-                "description": "主角探索废弃医院，逐步揭开自己失去的记忆和十年前的真相",
+                "name": "主线真相",
+                "description": f"{request.protagonist_seed}在{request.core_location}中逐步验证异常规则、识别隐藏阻力并面对最终代价",
                 "stages": [
                     {
                         "stage_id": "setup",
                         "name": "铺垫",
                         "chapter_range": [1, 2],
-                        "goal": "建立场景和角色动机",
-                        "must_reveal_clues": ["clue_lock_001"],
+                        "goal": "建立地点、角色目标和第一组可验证异常",
+                        "must_reveal_clues": ["clue_boundary_001"],
                     },
                     {
                         "stage_id": "investigation",
                         "name": "调查",
                         "chapter_range": [3, 6],
-                        "goal": "收集线索，逐步深入",
-                        "must_reveal_clues": ["clue_logbook_001", "clue_medical_records_001", "clue_personal_item_001"],
+                        "goal": "收集线索并确认隐藏行动痕迹",
+                        "must_reveal_clues": ["clue_record_001", "clue_trace_001", "clue_record_gap_001"],
                     },
                     {
                         "stage_id": "confrontation",
                         "name": "对峙",
                         "chapter_range": [7, 8],
-                        "goal": "与阻碍者对峙，突破障碍",
-                        "must_reveal_clues": ["clue_basement_key_001", "clue_experiment_001"],
+                        "goal": "让角色目标与隐藏阻力发生正面冲突",
+                        "must_reveal_clues": ["clue_rule_001", "clue_hidden_actor_001"],
                     },
                     {
                         "stage_id": "revelation",
                         "name": "真相",
                         "chapter_range": [9, 10],
-                        "goal": "揭示最终真相，完成人物弧",
+                        "goal": "揭示最终真相并完成选择",
                         "must_reveal_clues": ["clue_truth_001"],
                     },
                 ],
@@ -362,30 +330,29 @@ class ProjectTemplateGenerator:
         ]
 
     def _generate_character_arcs(self, request: TemplateGenerationRequest) -> List[Dict[str, Any]]:
-        """生成人物弧"""
         return [
             {
                 "character_id": "protagonist_001",
-                "arc_name": "自我发现之旅",
+                "arc_name": "选择与代价",
                 "stages": [
                     {
                         "stage": "denial",
-                        "description": "主角不愿承认自己与医院的联系",
+                        "description": "主角倾向用原有经验解释异常处境",
                         "chapter_range": [1, 2],
                     },
                     {
                         "stage": "doubt",
-                        "description": "主角开始怀疑自己的记忆",
+                        "description": "主角开始怀疑自己掌握的信息并不完整",
                         "chapter_range": [3, 5],
                     },
                     {
                         "stage": "confrontation",
-                        "description": "主角被迫面对过去",
+                        "description": "主角被迫面对目标背后的真实代价",
                         "chapter_range": [6, 8],
                     },
                     {
-                        "stage": "acceptance",
-                        "description": "主角接受真相，完成转变",
+                        "stage": "choice",
+                        "description": "主角在真相与代价之间做出主动选择",
                         "chapter_range": [9, 10],
                     },
                 ],
@@ -393,7 +360,6 @@ class ProjectTemplateGenerator:
         ]
 
     def _generate_style_bible(self, request: TemplateGenerationRequest) -> Dict[str, Any]:
-        """生成文风圣经"""
         return {
             "style_id": f"{request.genre}_style",
             "tone": request.tone,
@@ -407,14 +373,14 @@ class ProjectTemplateGenerator:
                 "细节反常",
                 "短暂停顿",
                 "未说完的话",
-                "旧物件带出的记忆",
+                "物件状态变化带出线索",
             ],
             "reference_keywords": [
-                "潮湿",
-                "昏暗",
-                "迟疑",
-                "锈迹",
-                "旧灯",
+                request.core_location,
+                request.theme,
+                "边界",
+                "痕迹",
+                "代价",
             ],
         }
 
@@ -423,12 +389,11 @@ class ProjectTemplateGenerator:
         request: TemplateGenerationRequest,
         characters: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """生成角色声音档案"""
         return [
             {
                 "character_id": char["character_id"],
                 "speech_style": "克制、短句、不轻易暴露情绪",
-                "inner_monologue": "怀疑自己，但习惯压下恐惧",
+                "inner_monologue": "在行动前反复确认可验证事实",
                 "vocabulary": ["确认", "不对", "可能", "等等"],
                 "forbidden": [
                     "突然热血宣言",
@@ -436,8 +401,8 @@ class ProjectTemplateGenerator:
                     "轻浮玩笑",
                 ],
                 "sample_lines": [
-                    "我只是想确认一件事。",
-                    "这把锁，不像是放了十年。",
+                    "我只想先确认一件事。",
+                    "这个细节不像是自然留下的。",
                 ],
             }
             for char in characters
@@ -448,115 +413,28 @@ class ProjectTemplateGenerator:
         request: TemplateGenerationRequest,
         plot_arcs: List[Dict[str, Any]],
     ) -> List[ChapterSeed]:
-        """生成章节种子"""
+        plan = [
+            (1, "建立核心地点、主角目标和第一处异常边界", "setup", ["protagonist_001", "location_gate"], ["边界为什么发生变化？", "谁最近接触过现场？"]),
+            (2, "进入前区并发现近期接触记录", "setup", ["location_frontdesk"], ["现场为何不像长期无人接触？", "阻碍者知道什么？"]),
+            (3, "追踪未知行动痕迹", "investigation", ["location_hallway"], ["痕迹属于谁？", "它为什么通向深处？"]),
+            (4, "与阻碍者第一次正面冲突", "investigation", ["obstructor_001"], ["阻碍者在保护什么？", "哪些信息被刻意回避？"]),
+            (5, "发现记录缺口并扩大怀疑范围", "investigation", ["location_archive"], ["缺失记录去了哪里？", "谁能改动线索顺序？"]),
+            (6, "整合已有证据并确认异常不是孤立事件", "investigation", [], ["多条线索如何互相印证？", "主角是否误判了目标？"]),
+            (7, "进入高风险区域并验证异常规则", "confrontation", ["location_deep"], ["规则如何运行？", "继续深入会付出什么代价？"]),
+            (8, "隐藏行动者造成新的阻碍", "confrontation", ["npc_hidden_actor_001"], ["隐藏行动者为什么干预？", "谁从线索错位中获益？"]),
+            (9, "进入隐藏区域并接近核心真相", "revelation", ["location_inner"], ["核心异常的来源是什么？", "主角必须承担什么选择？"]),
+            (10, "揭示最终真相并完成角色选择", "revelation", [], []),
+        ]
         return [
             ChapterSeed(
-                chapter_no=1,
-                chapter_function="建立旧医院异常与主角噩梦",
-                target_stage="setup",
-                must_introduce=["protagonist_001", "old_hospital_gate"],
-                suggested_threads=[
-                    "旧医院是否真的废弃？",
-                    "主角为什么梦见医院？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=2,
-                chapter_function="主角进入医院，发现门锁异常",
-                target_stage="setup",
-                must_introduce=["entrance_hall"],
-                suggested_threads=[
-                    "是谁在维护这把锁？",
-                    "最近有人来过吗？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=3,
-                chapter_function="探索护士站，发现被撕掉的记录",
-                target_stage="investigation",
-                must_introduce=["nurse_station"],
-                suggested_threads=[
-                    "谁撕掉了访客记录？",
-                    "最后一个访客是谁？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=4,
-                chapter_function="遇到看守人，第一次对峙",
-                target_stage="investigation",
-                must_introduce=["antagonist_001"],
-                suggested_threads=[
-                    "看守人在隐瞒什么？",
-                    "他为什么不让主角深入？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=5,
-                chapter_function="发现主角的医疗记录",
-                target_stage="investigation",
-                must_introduce=["room_302"],
-                suggested_threads=[
-                    "主角真的在这里住过？",
-                    "为什么病历被涂黑？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=6,
-                chapter_function="找到旧照片，记忆开始复苏",
-                target_stage="investigation",
-                must_introduce=[],
-                suggested_threads=[
-                    "照片上的另一个人是谁？",
-                    "主角忘记了什么？",
-                ],
-                must_not_reveal=["十年前事故真相", "反派真实身份"],
-            ),
-            ChapterSeed(
-                chapter_no=7,
-                chapter_function="获得地下室钥匙",
-                target_stage="confrontation",
-                must_introduce=["basement_stairs"],
-                suggested_threads=[
-                    "地下室藏着什么？",
-                    "看守人会阻止吗？",
-                ],
-                must_not_reveal=["十年前事故真相"],
-            ),
-            ChapterSeed(
-                chapter_no=8,
-                chapter_function="与看守人最终对峙，发现他的身份",
-                target_stage="confrontation",
-                must_introduce=["basement_corridor"],
-                suggested_threads=[
-                    "看守人的真实身份是什么？",
-                    "他为什么要保护这个秘密？",
-                ],
-                must_not_reveal=["十年前事故真相"],
-            ),
-            ChapterSeed(
-                chapter_no=9,
-                chapter_function="进入密室，发现实验记录",
-                target_stage="revelation",
-                must_introduce=["hidden_room"],
-                suggested_threads=[
-                    "医院进行了什么实验？",
-                    "主角是实验对象吗？",
-                ],
-                must_not_reveal=[],
-            ),
-            ChapterSeed(
-                chapter_no=10,
-                chapter_function="最终真相大白，主角完成自我接纳",
-                target_stage="revelation",
-                must_introduce=[],
-                suggested_threads=[],
-                must_not_reveal=[],
-            ),
+                chapter_no=chapter_no,
+                chapter_function=function,
+                target_stage=stage,
+                must_introduce=must_introduce,
+                suggested_threads=threads,
+                must_not_reveal=["最终真相", "隐藏行动者真实目的"] if chapter_no < 9 else [],
+            )
+            for chapter_no, function, stage, must_introduce, threads in plan
         ]
 
     def _validate_template(
@@ -568,7 +446,6 @@ class ProjectTemplateGenerator:
         plot_arcs: List[Dict[str, Any]],
         chapter_seeds: List[ChapterSeed],
     ) -> Dict[str, Any]:
-        """验证模板完整性"""
         issues = []
         warnings = []
 
@@ -586,8 +463,8 @@ class ProjectTemplateGenerator:
 
         clue_routes = {clue["clue_id"]: len(clue.get("discover_routes", [])) for clue in clues}
         for clue_id, routes in clue_routes.items():
-            if routes < 3:
-                warnings.append(f"线索 {clue_id} 只有 {routes} 条发现路径，建议至少3条")
+            if routes < 2:
+                warnings.append(f"线索 {clue_id} 只有 {routes} 条发现路径，建议至少2条")
 
         total_chapters = len(chapter_seeds)
         expected_chapters = 10
@@ -602,13 +479,11 @@ class ProjectTemplateGenerator:
         }
 
     def _save_template(self, template: ProjectTemplate) -> None:
-        """保存模板"""
         template_file = self.templates_dir / f"{template.template_id}.json"
         with open(template_file, "w", encoding="utf-8") as f:
             json.dump(template.to_dict(), f, ensure_ascii=False, indent=2)
 
     def load_template(self, template_id: str) -> Optional[ProjectTemplate]:
-        """加载模板"""
         template_file = self.templates_dir / f"{template_id}.json"
         if not template_file.exists():
             return None
@@ -617,11 +492,9 @@ class ProjectTemplateGenerator:
         return ProjectTemplate(**data)
 
     def list_templates(self) -> List[str]:
-        """列出所有模板"""
         return [f.stem for f in self.templates_dir.glob("*.json")]
 
     def create_project_from_template(self, template_id: str, project_name: str) -> Path:
-        """从模板创建项目"""
         template = self.load_template(template_id)
         if not template:
             raise ValueError(f"模板 {template_id} 不存在")

@@ -65,6 +65,7 @@ class AgentContext:
 
     # 有默认值的字段放最后
     background: str = ""
+    inventory: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         """转换为字典（用于 LLM prompt）"""
@@ -79,8 +80,9 @@ class AgentContext:
                 "location_id": self.location_id,
                 "location_name": self.location_name,
                 "mental_state": self.mental_state,
-                "known_facts": self.known_facts[:6],
+                "known_facts": self.known_facts[:8],
                 "beliefs": self.beliefs[:6],
+                "inventory": self.inventory,
             },
             "visible_environment": {
                 "description": self.location_public_description,
@@ -204,13 +206,14 @@ class CharacterAgentService:
         if isinstance(profile.personality, dict):
             traits = profile.personality.get("traits", [])
 
-        # V2.3：从 MemoryService 注入已知事实、信念、相关记忆
-        known_facts: List[str] = []
+        known_facts: List[str] = list(runtime.known_facts)
         beliefs: List[str] = []
         relevant_memories: List[MemoryChunk] = []
 
         if self.memory_service:
-            known_facts = self.memory_service.get_known_facts(agent_id, limit=6)
+            for fact in self.memory_service.get_known_facts(agent_id, limit=6):
+                if fact not in known_facts:
+                    known_facts.append(fact)
             beliefs = self.memory_service.get_beliefs(agent_id, limit=6)
 
             # 检索相关记忆
@@ -242,6 +245,7 @@ class CharacterAgentService:
             available_actions=[a for a in self.ACTIONS_V23],
             soft_hints=list(state.world.soft_hints[-2:]),
             background=background,
+            inventory=list(runtime.inventory),
         )
 
     # ==========================================
@@ -587,15 +591,17 @@ class CharacterAgentService:
         return (
             "你正在扮演小说世界中的一个真实人物，而不是作者。\n"
             "你的所有决策必须基于角色的背景、动机、秘密，而不是基于推进剧情。\n"
-            "林舟：他来查妹妹的死因，他害怕，但更害怕真相被永远埋葬——这是他的驱动力。\n"
-            "老周：他在隐瞒十年前的事，他害怕，但也愧疚——他不是坏人，只是个普通人。\n"
+            "\n"
+            "角色的驱动力来自他的目标、恐惧、秘密，而不是'让故事变得精彩'。\n"
+            "如果一个角色害怕某件事，他会下意识回避，哪怕这让读者觉得拖沓。\n"
+            "如果一个角色有明确目标，他会优先采取能推进目标的行动。\n"
             "\n"
             "你只能基于给定信息做决策，绝对不能编造你不知道的事实。\n"
             "你必须只输出一个 JSON（ActionCommand），不得输出小说正文、解释或额外文字。\n"
             "ask/talk 必须带 topic，topic 只能从 given list 中选择。\n"
             "move 动作的 target 必须是 available_moves 列表中的地点。\n"
             "所有字段必须完整，action_type 必须是枚举之一。\n"
-            "重要：agent_id 必须严格使用给定的 ID（如 char_linzho），禁止使用中文名称！\n"
+            "重要：agent_id 必须严格使用给定的 ID（如 char_protagonist），禁止使用中文名称！\n"
         )
 
     @staticmethod

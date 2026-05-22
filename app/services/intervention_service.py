@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app.models.event import EventLog
+from app.models.event import EventLog, PlotValue as EventPlotValue
 from app.models.state import WorldState
 from app.models.tension import InterventionEvent, InterventionProposal, PlotValue
 
@@ -55,29 +55,12 @@ class InterventionService:
         unlocked_targets = []
         added_topics = {}
 
-        if proposal.intervention_type == "environment_hint":
-            # 环境暗示：开放新的可检查目标
-            if "抽屉" in proposal.content or "抽屉" in proposal.content:
-                unlocked_targets.append(f"hint_{event_id}_drawer")
-            elif "门" in proposal.content or "门" in proposal.content:
-                unlocked_routes.append(f"route_{event_id}_secret_door")
-            elif "值班室" in proposal.content or "纸张" in proposal.content:
-                unlocked_targets.append(f"hint_{event_id}_guard_room_desk")
-            elif "锁" in proposal.content or "铁锁" in proposal.content:
-                unlocked_targets.append(f"hint_{event_id}_gate_lock")
-            elif "脚印" in proposal.content or "走廊" in proposal.content:
-                unlocked_targets.append(f"hint_{event_id}_footprints")
-            elif "文件柜" in proposal.content or "便签" in proposal.content:
-                unlocked_targets.append(f"hint_{event_id}_file_cabinet")
-            else:
-                # 默认添加一个通用的可探索目标
-                unlocked_targets.append(f"hint_{event_id}_investigate_point")
-
-        elif proposal.intervention_type == "npc_pressure":
-            # NPC 压力：可能开放新对话 topic
-            added_topics = {
-                "char_guard": ["why_nervous", "what_are_you_hiding"]
-            }
+        if proposal.creates_object:
+            object_id = proposal.creates_object.get("object_id")
+            if object_id:
+                unlocked_targets.append(object_id)
+        elif proposal.intervention_type == "environment_hint":
+            unlocked_targets.append(f"hint_{event_id}_investigate_point")
 
         return InterventionEvent(
             event_id=event_id,
@@ -89,6 +72,7 @@ class InterventionService:
             unlocked_routes=unlocked_routes,
             unlocked_targets=unlocked_targets,
             added_topics=added_topics,
+            created_objects={proposal.creates_object.get("object_id"): proposal.creates_object} if proposal.creates_object and proposal.creates_object.get("object_id") else {},
             plot_value=proposal.plot_value,
         )
 
@@ -99,6 +83,19 @@ class InterventionService:
 
         # 注意：这里我们不直接修改 discovered_facts
         # 干预只创造"机会"，不直接给出"答案"
+
+        for object_id, object_data in event.created_objects.items():
+            if object_id not in state.world.objects:
+                state.world.objects[object_id] = {
+                    "location_id": object_data.get("location_id") or event.location_id,
+                    "description": object_data.get("description", ""),
+                    "allowed_actions": object_data.get("allowed_actions", []),
+                    "hint_key": object_data.get("hint_key"),
+                    "target_clue_id": object_data.get("target_clue_id"),
+                    "source_character_id": object_data.get("source_character_id"),
+                    "discovered_by": event.visible_to,
+                    "hint_source": event.event_id,
+                }
 
         # 将解锁的目标添加到运行时环境中
         if event.unlocked_targets:
@@ -130,7 +127,7 @@ class InterventionService:
             visible_to=intervention.visible_to,
             discovered_facts=[],  # 干预不直接给线索，只给机会
             action=None,
-            plot_value=intervention.plot_value.model_dump(),
+            plot_value=EventPlotValue(**intervention.plot_value.model_dump()),
         )
 
     def save_history(self) -> None:

@@ -47,48 +47,66 @@ class CharacterArcService:
             self.character_arcs[arc.character_id] = arc
 
     def _create_default_arcs(self) -> None:
-        """创建默认的林舟人物弧光"""
-        linzhou_stages = [
+        """创建基于角色配置的默认人物弧光"""
+        protagonist = self._load_protagonist_profile()
+        character_id = protagonist.get("id") or "char_protagonist"
+        goals = protagonist.get("goals") or {}
+        desire = goals.get("long_term") or goals.get("short_term") or "完成当前目标"
+        background = protagonist.get("background") or "进入未知处境后被迫重新评估自己的判断"
+        stakes = protagonist.get("personal_stakes") or "错误选择会带来不可逆代价"
+
+        stages = [
             ArcStage(
                 stage_id="avoidance",
                 name="回避阶段",
-                description="回避过去，只想快速确认梦境来源",
-                required_belief_changes=["医院可能与自己有关"],
+                description="倾向用旧有判断解释当前处境",
+                required_belief_changes=["当前处境无法只靠旧经验解释"],
             ),
             ArcStage(
                 stage_id="doubt",
                 name="怀疑阶段",
-                description="开始怀疑自己的记忆",
-                required_belief_changes=["自己的记忆可能被篡改过"],
+                description="开始怀疑自己掌握的信息并不完整",
+                required_belief_changes=["必须重新审视已有线索"],
             ),
             ArcStage(
                 stage_id="confrontation",
                 name="面对阶段",
-                description="被迫面对过去",
-                required_belief_changes=["必须面对当年发生的事情"],
+                description="被迫面对目标背后的真实代价",
+                required_belief_changes=["继续推进意味着承担个人代价"],
             ),
             ArcStage(
                 stage_id="acceptance",
-                name="接纳阶段",
-                description="承认真相并做出选择",
-                required_belief_changes=["接受过去才能真正离开"],
+                name="选择阶段",
+                description="在真相和代价之间做出主动选择",
+                required_belief_changes=["必须主动选择而不是被处境推着走"],
             ),
         ]
 
-        linzhou_arc = CharacterArc(
-            character_id="char_linzho",
-            starting_state="逃避过去，不愿相信自己的记忆有问题",
-            wound="童年事故造成的记忆断裂",
-            false_belief="只要不追究过去，就能正常生活",
-            desire="摆脱噩梦",
-            need="承认自己曾经逃避的真相",
+        arc = CharacterArc(
+            character_id=character_id,
+            starting_state=background,
+            wound=stakes,
+            false_belief="只要按原计划行动就能控制局面",
+            desire=desire,
+            need="理解线索背后的代价，并为自己的选择负责",
             current_stage="avoidance",
-            stages=linzhou_stages,
+            stages=stages,
             completed_stages=[],
             progress=0,
         )
 
-        self.character_arcs["char_linzho"] = linzhou_arc
+        self.character_arcs[character_id] = arc
+
+    def _load_protagonist_profile(self) -> Dict[str, Any]:
+        characters_file = self.world_config_dir / self.world_id / "characters.json"
+        try:
+            if characters_file.exists():
+                data = json.loads(characters_file.read_text(encoding="utf-8"))
+                characters = data.get("characters", []) if isinstance(data, dict) else data
+                return next((c for c in characters if c.get("role") == "protagonist"), characters[0] if characters else {})
+        except Exception:
+            return {}
+        return {}
 
     def get_arc_context(self, character_id: str) -> Optional[ArcContext]:
         """获取人物弧光上下文"""
@@ -129,12 +147,12 @@ class CharacterArcService:
     def _generate_internal_conflict(self, arc: CharacterArc, stage: ArcStage) -> str:
         """生成角色当前的内心冲突描述"""
         conflicts = {
-            "avoidance": "想查清噩梦来源，但害怕发现自己和医院有关。",
-            "doubt": "记忆的碎片越来越多，但你仍在抗拒承认这是真的。",
-            "confrontation": "你知道真相就在眼前，但揭露它意味着承认多年的逃避是错的。",
-            "acceptance": "真相可能摧毁你，但也可能让你真正解脱。",
+            "avoidance": f"想继续按原计划推进，但{arc.wound}让每一步都变得更沉重。",
+            "doubt": "线索之间的矛盾越来越多，角色开始怀疑自己最初的判断。",
+            "confrontation": "真相已经逼近，但承认它意味着必须改变接下来的选择。",
+            "acceptance": "继续前进需要主动承担代价，而不是等待局势替自己决定。",
         }
-        return conflicts.get(arc.current_stage, "过去的阴影正在逼近。")
+        return conflicts.get(arc.current_stage, "未解决的内心冲突正在逼近。")
 
     def record_plot_event_for_character(self, character_id: str) -> None:
         """记录角色经历了一个重要事件，检查是否触发反思"""
@@ -203,17 +221,14 @@ class CharacterArcService:
         """生成新认知"""
         understanding = []
 
-        # 基于事件类型
         for event in events:
-            if "锁" in event and "换" in event:
-                understanding.append("旧医院并非彻底废弃，近期仍有人出入。")
-            if "门卫" in event or "看门人" in event:
-                if "回避" in event or "隐瞒" in event:
-                    understanding.append("看门人至少隐瞒了近期有人出入的事实。")
-            if "档案" in event or "记录" in event:
-                understanding.append("有人在刻意掩盖医院里发生过的事情。")
+            if any(key in event for key in ["边界", "入口", "变化", "痕迹"]):
+                understanding.append("当前地点的表面状态与实际变化不一致，近期可能发生过未说明的干预。")
+            if any(key in event for key in ["回避", "隐瞒", "矛盾"]):
+                understanding.append("可见角色或环境反馈中存在回避信息，说明事实链仍不完整。")
+            if any(key in event for key in ["记录", "缺口", "错位"]):
+                understanding.append("已有记录无法单独解释事件，需要和现场线索交叉验证。")
 
-        # 如果还不够，补充默认
         if not understanding:
             understanding.append("这里发生的事情比表面上的复杂。")
 
@@ -225,13 +240,12 @@ class CharacterArcService:
         """生成信念变化"""
         changes = []
 
-        # 从回避到怀疑的转变
         if stage.stage_id == "avoidance":
-            if any("锁" in e for e in events):
+            if any(any(key in e for key in ["边界", "痕迹", "记录", "矛盾"]) for e in events):
                 changes.append(
                     BeliefChange(
-                        from_belief="医院只是噩梦里的地点",
-                        to_belief="医院可能与自己的过去有关",
+                        from_belief="只要按原计划行动就能控制局面",
+                        to_belief="当前处境必须依靠可验证线索重新判断",
                     )
                 )
 
@@ -244,12 +258,13 @@ class CharacterArcService:
         updates = []
 
         for event in events:
-            if "看门人" in event and ("回避" in event or "隐瞒" in event):
+            if "target=" in event and ("回避" in event or "隐瞒" in event):
+                target = event.split("target=", 1)[1].split()[0]
                 updates.append(
                     RelationshipUpdate(
-                        target="char_guard",
-                        attitude_delta=-15,
-                        reason="看门人多次回避关键问题",
+                        target=target,
+                        attitude_delta=-10,
+                        reason="对方在关键信息上表现出回避或隐瞒",
                     )
                 )
                 break
@@ -263,11 +278,11 @@ class CharacterArcService:
         intentions = []
 
         if "entrance" in location or "入口" in location:
-            intentions.append("寻找近期出入医院的证据")
-            intentions.append("弄清看门人听命于谁")
-        elif "lobby" in location or "大厅" in location:
-            intentions.append("检查前台是否有近期记录")
-            intentions.append("寻找通往档案室的路")
+            intentions.append("验证边界状态为何发生变化")
+            intentions.append("确认近期是谁或什么力量影响了入口")
+        elif "lobby" in location or "大厅" in location or "front" in location:
+            intentions.append("检查公共区域是否留下近期接触记录")
+            intentions.append("寻找通往记录区或更深区域的路径")
         else:
             intentions.append("继续深入调查")
             intentions.append("寻找更多线索")

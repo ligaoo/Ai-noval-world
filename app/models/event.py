@@ -34,6 +34,7 @@ class EventLog(BaseModel):
     result: str
     visible_to: List[str] = Field(default_factory=list)
     hidden_effects: List[str] = Field(default_factory=list)
+    discovered_facts: List[str] = Field(default_factory=list)
     emotional_impact: EmotionalImpact = Field(default_factory=EmotionalImpact)
     plot_value: PlotValue = Field(default_factory=PlotValue)
 

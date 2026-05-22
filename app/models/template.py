@@ -6,15 +6,15 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class TemplateGenerationRequest:
-    genre: str = "灵异悬疑"
-    theme: str = "记忆与愧疚"
-    protagonist_seed: str = "失忆青年"
-    core_location: str = "废弃医院"
+    genre: str = "悬疑"
+    theme: str = "选择与代价"
+    protagonist_seed: str = "被卷入异常处境的人"
+    core_location: str = "核心地点"
     target_length: str = "10 chapters"
     tone: str = "克制、压抑"
     complexity: str = "medium"
-    preferred_elements: List[str] = field(default_factory=lambda: ["旧案", "梦境", "医院", "目击者"])
-    forbidden_elements: List[str] = field(default_factory=lambda: ["爽文复仇", "直接鬼怪大战"])
+    preferred_elements: List[str] = field(default_factory=lambda: ["异常规则", "可验证线索", "隐藏行动者", "目击者"])
+    forbidden_elements: List[str] = field(default_factory=lambda: ["爽文复仇", "直接鬼怪大战", "套用固定医院旧案模板"])
 
     def to_dict(self) -> Dict[str, Any]:
         return {

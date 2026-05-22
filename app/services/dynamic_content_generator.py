@@ -57,60 +57,43 @@ class DynamicContentGenerator:
     def _build_location_templates(self) -> Dict[str, List[Dict[str, Any]]]:
         """构建地点发现模板"""
         return {
-            "医院": [
-                {"pattern": "值班室", "content": "桌上放着一本翻旧的值班记录，最后几页的字迹格外潦草。", "progress": 2, "mystery": 3},
-                {"pattern": "走廊", "content": "走廊尽头的灯光在微微摇晃，投下奇怪的影子。", "progress": 1, "mystery": 2},
-                {"pattern": "病房", "content": "床头柜上有一只半满的水杯，杯壁还残留着水渍。", "progress": 2, "mystery": 2},
-                {"pattern": "档案室", "content": "某个抽屉没有完全关上，里面露出来的文件日期有些异常。", "progress": 3, "mystery": 4},
+            "boundary": [
+                {"pattern": "gate", "content": "边界处留下了近期变化的痕迹，和表面状态并不一致。", "progress": 2, "mystery": 3},
+                {"pattern": "entrance", "content": "入口附近有一处细节被反复触碰过，像是在提示某种进入或离开的条件。", "progress": 2, "mystery": 3},
             ],
-            "旧楼": [
-                {"pattern": "楼梯", "content": "楼梯扶手上有一道新鲜的划痕。", "progress": 2, "mystery": 2},
-                {"pattern": "阁楼", "content": "阁楼的地板上有一层薄尘，但某个角落的灰尘被扫开过。", "progress": 3, "mystery": 3},
-                {"pattern": "地下室", "content": "空气里弥漫着一股淡淡的消毒水味。", "progress": 1, "mystery": 4},
+            "record": [
+                {"pattern": "archive", "content": "记录的排列出现缺口，像是有人刻意改变过信息顺序。", "progress": 3, "mystery": 4},
+                {"pattern": "record", "content": "留存信息之间互相矛盾，需要更多证据才能确认哪一部分可信。", "progress": 2, "mystery": 3},
             ],
-            "办公室": [
-                {"pattern": "办公桌", "content": "抽屉里有一张撕碎的纸条，拼起来看像是某种收据。", "progress": 2, "mystery": 3},
-                {"pattern": "文件柜", "content": "文件的排列有些异常，好像被人重新整理过。", "progress": 2, "mystery": 2},
+            "trace": [
+                {"pattern": "trace", "content": "这里有一组不属于当前可见角色的行动痕迹，方向避开了最直接的路径。", "progress": 2, "mystery": 3},
+                {"pattern": "inner", "content": "空间深处的反馈更强，说明异常并不是随机出现的。", "progress": 2, "mystery": 4},
             ],
             "通用": [
-                {"pattern": "门", "content": "门锁上有新鲜的划痕，像是最近被人撬过。", "progress": 2, "mystery": 3},
-                {"pattern": "窗户", "content": "窗户边缘有一些泥土，不是这里的土。", "progress": 2, "mystery": 3},
-                {"pattern": "地板", "content": "地板上有几个不完整的脚印，朝向某个方向。", "progress": 2, "mystery": 2},
+                {"pattern": "", "content": "这里出现了新的可检查细节，说明环境状态刚刚发生过变化。", "progress": 2, "mystery": 2},
+                {"pattern": "", "content": "某个细节和角色已有认知不一致，值得进一步验证。", "progress": 2, "mystery": 3},
             ],
         }
 
     def _build_object_templates(self) -> Dict[str, List[Dict[str, Any]]]:
         """构建物品发现模板"""
         return {
-            "锁": [
-                "锁芯异常干净，说明最近经常被人使用。",
-                "锁的样式很特别，不是这里常见的类型。",
-                "锁上面有几道新鲜的划痕，像是钥匙插入的痕迹。",
+            "boundary": [
+                "边界痕迹比周围环境更新，说明近期有人或某种力量改变过这里。",
+                "这个位置的状态和它应有的状态不一致，像是被反复验证过。",
             ],
-            "抽屉": [
-                "抽屉最里面藏着一个信封，没有邮票也没有地址。",
-                "抽屉里的东西被人翻过，但少了几样。",
-                "抽屉底部贴着一张小纸条，写着一串数字。",
+            "record": [
+                "记录内容存在缺口，缺失部分正好避开了关键因果。",
+                "信息被重新排列过，表面顺序无法解释实际发生的事。",
             ],
-            "文件": [
-                "文件里夹着一张照片，背面写着一个名字。",
-                "某一页的边缘有被水浸过的痕迹。",
-                "最后几页被人撕掉了，只剩下一些碎纸。",
-            ],
-            "照片": [
-                "照片里的某个人被用红笔圈了出来。",
-                "照片背面写着一个日期，是最近的。",
-                "照片边缘有折痕，像是经常被拿出来看。",
-            ],
-            "杯子": [
-                "杯口有口红印，但不是这里任何人的。",
-                "杯子里还有半杯水，还没完全冷透。",
-                "杯子底部有一个奇怪的标记。",
+            "trace": [
+                "痕迹指向更深处，但留下痕迹的人显然刻意避开了直接接触。",
+                "残留细节显示这里近期发生过一次未被记录的行动。",
             ],
             "通用": [
-                "上面有几枚新鲜的指纹。",
-                "东西摆放的位置有些奇怪，像是被人移动过。",
-                "凑近闻能闻到一股淡淡的奇怪气味。",
+                "它的位置被轻微移动过，变化幅度不大，却足以说明有人介入。",
+                "表面留下了近期接触痕迹，和周围长期静止的状态不一致。",
+                "细节之间存在轻微矛盾，需要和其他线索互相印证。",
             ],
         }
 
@@ -181,7 +164,7 @@ class DynamicContentGenerator:
         # 5. 随机决定是否开启新线索链
         new_thread_hint = None
         if random.random() < 0.3 and current_progress > 30:
-            threads = ["神秘人物的真实身份", "十年前的往事", "隐藏的秘密关系"]
+            threads = ["隐藏行动者的真实目的", "异常规则的运行条件", "角色选择造成的后果"]
             new_thread_hint = random.choice(threads)
 
         discovery = GeneratedDiscovery(
@@ -264,36 +247,18 @@ class DynamicContentGenerator:
         """
         clue_id = f"gen_clue_{location_id}_{chapter_no}_{len(self.generated_clues)}"
 
-        # 根据类型决定线索内容
         clue_templates = [
-            "一张泛黄的照片",
-            "一本破旧的日记",
-            "一张撕碎的纸条",
-            "一把奇怪的钥匙",
-            "一个空的药瓶",
-            "一张收据",
-            "一张地图",
-            "一个录音笔",
+            "一处边界状态变化",
+            "一组近期行动痕迹",
+            "一段缺失或错位的记录",
+            "一个被移动过的可检查物",
+            "一条与已有认知矛盾的细节",
+            "一个指向后续区域的环境标记",
         ]
 
         description = random.choice(clue_templates)
-
-        # 根据地点类型生成内容
-        location_specific = ""
-        if "医院" in location_id or "hospital" in location_id.lower():
-            location_specific = random.choice([
-                "病历记录有些奇怪，有一页被撕掉了。",
-                "药品清单上少了几样东西。",
-                "值班记录的字迹有些异常。",
-            ])
-        elif "办公室" in location_id:
-            location_specific = random.choice([
-                "文件里夹着一张奇怪的便签。",
-                "抽屉最里面有一个奇怪的标记。",
-                "日历上某个日期被圈了出来。",
-            ])
-
-        full_content = f"{description}——{location_specific}" if location_specific else description
+        location_name = self._location_name(location_id)
+        full_content = f"{location_name}中出现{description}，需要通过后续行动与其他证据互相验证。"
 
         generated = GeneratedClue(
             clue_id=clue_id,
@@ -314,6 +279,12 @@ class DynamicContentGenerator:
 
         self.generated_clues[clue_id] = generated
         return generated
+
+    def _location_name(self, location_id: str) -> str:
+        try:
+            return self.world.map.get_location(location_id).name
+        except Exception:
+            return location_id
 
     def generate_environment_description(
         self,

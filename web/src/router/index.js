@@ -60,6 +60,12 @@ const routes = [
     name: 'candidate-review',
     component: () => import('../views/CandidateReviewPanel.vue'),
     meta: { title: '候选审核面板' }
+  },
+  {
+    path: '/bootstrap',
+    name: 'bootstrap',
+    component: () => import('../views/BootstrapPreview.vue'),
+    meta: { title: 'Story Bootstrap' }
   }
 ]
 

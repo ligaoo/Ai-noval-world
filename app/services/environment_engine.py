@@ -30,13 +30,9 @@ class EnvironmentEngine:
         self.current_chapter = 1
 
     def apply_action(self, state: WorldState, action: ActionCommand) -> AppliedResult:
-        # 0) 兜底修复：如果 LLM 返回了中文名称，映射到角色ID
+        # 0) 兜底修复：如果 LLM 返回了中文名称，映射到角色ID（基于当前世界的角色配置动态生成）
         if action.agent_id not in state.characters:
-            # 尝试通过名称匹配
-            name_to_id = {
-                "林舟": "char_linzho",
-                "老周": "char_guard",
-            }
+            name_to_id = {char.name: char.id for char in self.world.characters.characters}
             if action.agent_id in name_to_id:
                 action.agent_id = name_to_id[action.agent_id]
 
@@ -82,6 +78,7 @@ class EnvironmentEngine:
             event_type="action_result",
             result=result_text,
             plot_value=plot_value if (plot_value.mystery or plot_value.conflict or plot_value.progress) else PlotValue(),
+            discovered_facts=discovered,
         )
         new_events.append(raw_event)
 
@@ -93,6 +90,7 @@ class EnvironmentEngine:
                 event_type="plot_event",
                 result=result_text,
                 plot_value=plot_value,
+                discovered_facts=discovered,
             )
             new_events.append(plot_event)
 
@@ -157,7 +155,7 @@ class EnvironmentEngine:
         plot_value = PlotValue()
         rel_changes: List[RelationshipChange] = []
 
-        matched, clue, route, reason = self._match_discover_route(action)
+        matched, clue, route, reason = self._match_discover_route(state, action)
         if matched and clue and route:
             ok, reason2 = self._check_route_conditions(state, action, clue, route)
             if ok:
@@ -265,12 +263,17 @@ class EnvironmentEngine:
             f"成功从 {from_location.id} 移动到 {to_location.id}",
         )
 
-    def _match_discover_route(self, action: ActionCommand) -> Tuple[bool, Optional[Clue], Optional[DiscoverRoute], str]:
+    def _match_discover_route(
+        self, state: WorldState, action: ActionCommand
+    ) -> Tuple[bool, Optional[Clue], Optional[DiscoverRoute], str]:
+        actor_location = state.characters[action.agent_id].location_id
         for clue in self.world.clues.clues:
             for r in clue.discover_routes:
                 if r.action_type != action.action_type:
                     continue
                 if r.target != action.target:
+                    continue
+                if r.location_id and r.location_id != actor_location:
                     continue
                 if r.topic is not None and r.topic != action.topic:
                     continue
@@ -301,14 +304,35 @@ class EnvironmentEngine:
         return True, "无需技能检定"
 
     def _apply_known_fact(self, state: WorldState, discoverer_id: str, clue: Clue) -> None:
-        if clue.on_discovered.add_known_fact_to == "all":
-            for cid, cs in state.characters.items():
-                if clue.id not in cs.known_facts:
-                    cs.known_facts.append(clue.id)
-        else:
-            cs = state.characters[discoverer_id]
+        # 优先使用 Bootstrap 注入的自然语言事实（bootstrap_fact），
+        # 否则回退到 clue.id 作为 known_fact 标识
+        # 兼容现有 Clue 模型：动态字段从原始 model_dump 中取
+        try:
+            clue_dict = clue.model_dump()
+        except Exception:
+            clue_dict = {}
+
+        nl_fact = clue_dict.get("bootstrap_fact") or clue.id
+        inventory_item = clue_dict.get("bootstrap_inventory")
+
+        def _record(cs):
+            # 把自然语言事实和 clue.id 都加入 known_facts，
+            # 这样 character_agent_service 在拼 prompt 时可读到"具体内容"，
+            # 而 consistency_service 还能用 clue.id 做引用校验
+            if nl_fact and nl_fact not in cs.known_facts:
+                cs.known_facts.append(nl_fact)
             if clue.id not in cs.known_facts:
                 cs.known_facts.append(clue.id)
+            if inventory_item and inventory_item not in cs.inventory:
+                cs.inventory.append(inventory_item)
+
+        if clue.on_discovered.add_known_fact_to == "all":
+            for cid, cs in state.characters.items():
+                _record(cs)
+        else:
+            cs = state.characters.get(discoverer_id)
+            if cs is not None:
+                _record(cs)
 
     @staticmethod
     def _apply_relation(state: WorldState, rc: RelationshipChange) -> None:
@@ -346,6 +370,7 @@ class EnvironmentEngine:
         event_type: str,
         result: str,
         plot_value: PlotValue,
+        discovered_facts: Optional[List[str]] = None,
     ) -> EventLog:
         location_id = state.characters[action.agent_id].location_id
         event_id = self._new_event_id(state, action, event_level)
@@ -359,6 +384,7 @@ class EnvironmentEngine:
             action=action,
             result=result,
             visible_to=[action.agent_id],
+            discovered_facts=list(discovered_facts or []),
             plot_value=plot_value,
         )
 
@@ -386,17 +412,9 @@ class EnvironmentEngine:
         if action.action_type == "inspect":
             # 特殊处理 Director 干预解锁的目标
             if action.target.startswith("hint_"):
-                # 根据目标类型返回不同的发现
-                if "desk" in action.target or "drawer" in action.target:
-                    return "你仔细检查了这里，发现抽屉里有一张泛黄的值班记录，上面的字迹有些模糊，但能看出最近几天的签名都很奇怪。"
-                elif "lock" in action.target:
-                    return "你仔细检查了铁锁，发现它虽然看起来很旧，但锁芯异常干净，像是最近经常被人使用。"
-                elif "footprints" in action.target:
-                    return "你蹲下来观察脚印，它们通向走廊深处，看起来是最近留下的。"
-                elif "file" in action.target or "cabinet" in action.target:
-                    return "你打开文件柜，里面有一叠旧病历，其中一本的封面上有一个奇怪的红色标记。"
-                else:
-                    return "你仔细检查了这个地方，发现了一些不寻常的痕迹，看起来有人最近来过。"
+                runtime_obj = state.world.objects.get(action.target, {})
+                description = runtime_obj.get("description") or "这里出现了一个可检查的新细节。"
+                return f"你仔细检查了这个新出现的线索点。{description}"
 
             loc = self.world.map.get_location(state.characters[action.agent_id].location_id)
             obj = next((o for o in loc.objects if o.id == action.target), None)

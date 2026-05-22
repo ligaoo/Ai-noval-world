@@ -29,26 +29,21 @@ class WorldStateService:
                     "location_id": loc.id,
                 }
 
-        # 初始化角色运行态（V1：默认都在第一个地点）
+        location_ids = {loc.id for loc in world.map.locations}
         start_location = world.map.locations[0].id
         characters: Dict[str, CharacterRuntimeState] = {}
         for c in world.characters.characters:
+            initial_location = c.initial_location if c.initial_location in location_ids else start_location
             characters[c.id] = CharacterRuntimeState(
-                location_id=start_location,
+                location_id=initial_location,
                 mental_state="",
-                known_facts=[],
-                suspicions=[],
-                inventory=[],
+                known_facts=list(c.known_facts),
+                suspicions=list(c.suspicions),
+                inventory=list(c.inventory),
                 last_action=None,
                 repeat_action_count=0,
                 attitude_to={},
             )
-
-        # 初始关系：看门人对主角更警惕
-        if len(world.characters.characters) >= 2:
-            a = world.characters.characters[0].id
-            b = world.characters.characters[1].id
-            characters[b].attitude_to[a] = -20
 
         return WorldState(
             simulation_id=simulation_id,

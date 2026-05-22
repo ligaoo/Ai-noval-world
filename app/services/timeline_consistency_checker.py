@@ -26,14 +26,15 @@ class TimelineConsistencyChecker:
             (r"事故发生在\s*(\d+)\s*年前", "accident_years_ago"),
         ]
 
-        # 关键词到标准字段的映射
         self.keyword_to_slot = {
             "官方关闭": "official_closed_years_ago",
             "官方停用": "official_closed_years_ago",
             "实际废弃": "actual_abandoned_years_ago",
             "没人进出": "actual_abandoned_years_ago",
-            "事故": "hospital_accident_years_ago",
-            "火灾": "hospital_accident_years_ago",
+            "关键事件": "origin_event_years_ago",
+            "异常": "origin_event_years_ago",
+            "事故": "origin_event_years_ago",
+            "火灾": "origin_event_years_ago",
         }
 
     def check(self, chapter_content: str) -> Dict[str, Any]:
@@ -129,14 +130,14 @@ class TimelineConsistencyChecker:
         conflict_issues = [i for i in issues if i["type"] == "timeline_conflict"]
 
         if conflict_issues:
-            lines = [
-                "统一时间线：",
-                f"- 十年前发生旧医院事故（{self.timeline.get('hospital_accident_years_ago', 10)}年前）",
-                f"- 九年前起实际无人进出（{self.timeline.get('actual_abandoned_years_ago', 9)}年前）",
-                f"- 两年前官方才正式登记停用（{self.timeline.get('official_closed_years_ago', 2)}年前）",
+            lines = ["统一时间线："]
+            for key, value in self.timeline.items():
+                explanation = self.timeline_explanations.get(key, key)
+                lines.append(f"- {explanation}：{value}年前")
+            lines.extend([
                 "",
-                "请在表述中明确区分这三个不同的时间节点，避免混淆。"
-            ]
+                "请在表述中明确区分不同时间节点，避免把起源事件、实际废弃和官方记录混为一谈。",
+            ])
             return "\n".join(lines)
 
         return ""

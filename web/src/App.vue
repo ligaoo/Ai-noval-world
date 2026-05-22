@@ -49,7 +49,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useWorldStore } from '@/stores/world'
-import { Home, Users, Users2, Map, Search, GitBranch, UserCheck, CheckCircle2 } from 'lucide-vue-next'
+import { Home, Users, Users2, Map, Search, GitBranch, UserCheck, CheckCircle2, Wand2 } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
 
@@ -65,6 +65,12 @@ const generatorNavItems = [
     name: 'home',
     title: '总览',
     icon: Home
+  },
+  {
+    path: '/bootstrap',
+    name: 'bootstrap',
+    title: 'Story Bootstrap',
+    icon: Wand2
   },
   {
     path: '/generator/character',

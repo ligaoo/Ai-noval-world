@@ -36,6 +36,22 @@ class NarrativeService:
         self.enable_consistency_check = enable_consistency_check
         self.event_svc = EventLogService()
         self.consistency_svc = ConsistencyService(world, sim_dir, llm_client, trace_service)
+        # 自动加载 writer_story_anchors.json（由 StoryBootstrapper 写入）
+        self.story_anchors: Optional[Dict[str, Any]] = self._load_story_anchors()
+
+    def _load_story_anchors(self) -> Optional[Dict[str, Any]]:
+        """从 worlds/<world_id>/writer_story_anchors.json 加载叙事锚点"""
+        try:
+            # WorldConfig.from_directory 读取时 world_dir 信息没有直接保存，
+            # 但 world.world_id 已经存在，通过 sim_dir 上溯到 project_root
+            project_root = self.sim_dir.parent.parent  # outputs/sim_xxx -> outputs -> project_root
+            anchor_file = project_root / "worlds" / self.world.world_id / "writer_story_anchors.json"
+            if anchor_file.exists():
+                with open(anchor_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            return None
+        return None
 
     def generate_chapter(self) -> Dict[str, Any]:
         """生成完整章节：plan + draft + consistency report"""
@@ -43,8 +59,17 @@ class NarrativeService:
         all_events = self.event_svc.read_all(self.sim_dir)
         plot_events = [e for e in all_events if e.event_level == "plot"]
 
+        # P1（plan §19）：VisibleEventFilter — 只写 POV 能感知的事件给 LLM
+        # 防止 hidden_actor 的真实行动直接出现在正文中
+        from app.services.visible_event_filter import VisibleEventFilter
+        ve_filter = VisibleEventFilter()
+        pov_id = self.world.chapter_goal.pov
+        filtered_plot_events = ve_filter.filter_for_narrative(plot_events, pov_id)
+        # 过滤掉直接暴露 hidden_actor 身份的敏感内容
+        filtered_plot_events = [e for e in filtered_plot_events if not ve_filter.has_sensitive_content(e)]
+
         # 2. 规则生成 chapter_plan
-        plan = self._build_chapter_plan(plot_events)
+        plan = self._build_chapter_plan(filtered_plot_events)
         with open(self.sim_dir / "chapter_plan.json", "w", encoding="utf-8") as f:
             json.dump({
                 "chapter_title": plan.chapter_title,
@@ -117,13 +142,30 @@ class NarrativeService:
         ending_hook_event_id = self._select_ending_hook(beats, plot_events)
 
         return ChapterPlan(
-            chapter_title=getattr(self.world.chapter_goal, "title", "生锈的铁门"),
+            chapter_title=self._generate_default_chapter_title(plot_events),
             pov=self.world.chapter_goal.pov,
             chapter_goal=self.world.chapter_goal.goal,
             emotional_curve=emotional_curve,
             beats=beats,
             ending_hook_event_id=ending_hook_event_id,
         )
+
+    def _generate_default_chapter_title(self, plot_events: List[EventLog]) -> str:
+        """根据事件或世界配置生成默认章节标题"""
+        if plot_events and hasattr(plot_events[0], "location_id") and plot_events[0].location_id:
+            try:
+                loc = self.world.map.get_location(plot_events[0].location_id)
+                if loc and loc.name and loc.name != "Starting Point":
+                    return loc.name
+            except KeyError:
+                pass
+
+        if plot_events and hasattr(plot_events[0], "result"):
+            first_result = plot_events[0].result
+            if len(first_result) > 10:
+                return first_result[:10]
+
+        return "第一章" if self.world.bible.era == "古代" else "序章"
 
     def _select_ending_hook(self, beats: List[ChapterBeat], plot_events: List[EventLog]) -> Optional[str]:
         """选择结尾钩子：选一个中等悬念的事件，不要选最恐怖的那个"""
@@ -352,62 +394,130 @@ class NarrativeService:
     @staticmethod
     def _build_narrative_system_prompt() -> str:
         return (
-            "你是一位资深悬疑小说作家，擅长氛围营造和悬念控制。\n"
-            "你的任务：将事件日志改写为引人入胜的小说章节。\n"
+            "你是一位资深小说作家，擅长氛围营造、人物塑造和悬念控制。\n"
+            "你的任务：将事件日志改写为引人入胜的小说章节，严格基于用户消息中给出的【世界设定】与【角色档案】，不要套用你脑海中其它故事的模板。\n"
             "\n"
-            "【第一原则：节奏控制】\n"
-            '❌ 错误做法：每个段落都释放一个恐怖点，读者"被喂线索"\n'
-            '✅ 正确做法：紧张与喘息交替，让读者有消化空间\n'
+            "【第一原则：忠于世界设定】\n"
+            "❌ 错误做法：忽略给定世界，使用医院/医生/妹妹/老周等任何与本世界无关的角色或场景\n"
+            "✅ 正确做法：所有人物、地点、物品、规则都必须严格来自用户消息中的白名单与角色档案\n"
+            "- 章节中出现的主角姓名 = 用户消息中【角色档案】里 POV 角色的名字\n"
+            "- 章节中出现的地点 = 用户消息中【允许出现的实体·地点】里的名字\n"
+            "- 不允许凭空虚构姓名、亲属关系（妹妹/弟弟等）、未在档案中出现的过往\n"
             "\n"
-            "具体要求：\n"
-            "1. 一个 beat（段落）最多写 1-2 个异常，不要堆砌\n"
-            "2. 释放一个异常后，必须有观察/思考/行动作为喘息\n"
+            "【第二原则：节奏控制】\n"
+            "❌ 错误做法：每个段落都释放一个高强度事件，读者被喂线索\n"
+            "✅ 正确做法：紧张与喘息交替，让读者有消化空间\n"
+            "1. 一个 beat（段落）最多写 1-2 个核心事件，不要堆砌\n"
+            "2. 释放一个事件后，必须有观察/思考/行动作为喘息\n"
             "3. 主角的心理活动要占一定比例：回忆、推理、猜测\n"
-            "4. 不要让恐怖点连续出现，中间要有人物的正常反应\n"
             "\n"
-            "【第二原则：异常分层释放】\n"
-            "本章只释放「现实异常」，把「超自然异常」留到下一章\n"
-            "- 现实异常（本章可写）：门锁异常、钥匙新、档案缺失、病历被动过、老周说谎\n"
-            "- 超自然异常（留到下章）：脚步声、墙里的东西、手指骨、异响\n"
-            "\n"
-            "【第三原则：氛围来自克制】\n"
-            '1. 少用"像XX一样"的恐怖比喻\n'
-            "2. 多用具体细节：主机灯还亮着、油漆未干、锁芯有划痕\n"
-            '3. 恐怖来自"本该不在的东西出现了"，而不是"东西本身有多吓人"\n'
-            '4. 心理描写要克制：不要写"我好害怕"，写手心出汗、手指发抖、不敢呼吸\n'
+            "【第三原则：氛围与基调】\n"
+            "1. 严格遵循【世界基调】（如压抑/恐怖/绝望，或轻松/热血等）所暗示的语感\n"
+            "2. 多用具体的感官细节（视/听/嗅/触/痛），不要空洞的形容词\n"
+            "3. 心理描写要克制：写身体反应（手心出汗、呼吸停顿），少写直白情绪标签\n"
             "\n"
             "【第四原则：主角动机】\n"
-            '林舟每一步都带着"查妹妹死因"的目的，他的发现都要和这个动机关联\n'
-            "他的疑问要有意义：为什么要查这个？这个发现对妹妹的死意味着什么？\n"
+            "主角每一步行动都应能从【角色档案】里的目标/恐惧/秘密推导出来。\n"
+            "他的疑问与决定要服务于角色档案中给出的 short_term / long_term goals。\n"
             "\n"
             "【第五原则：悬念控制】\n"
             "1. 结尾只给一点暗示，不要揭示真相\n"
-            "2. 让读者产生疑问：这是超自然还是人为？老周知道什么？\n"
+            "2. 让读者带着疑问翻下一页\n"
             "3. 不要在结尾把所有悬念一次性抛出\n"
             "\n"
-            "【写作规则】\n"
-            "1. 只写 POV 角色能感知到的内容\n"
+            "【写作硬性规则】\n"
+            "1. 只写 POV 角色能感知到的内容，没有上帝视角\n"
             "2. 不添加白名单外的地点、物品、人物\n"
             "3. 不泄露角色不知道的真相\n"
-            "4. 不出现上帝视角\n"
-            "5. 语气克制、压抑\n"
+            "4. 不要复用其它故事的人物名（如「林舟」「老周」「林玥」等），除非它们出现在本次【角色档案】白名单中\n"
         )
 
     def _build_narrative_user_prompt(self, plan: ChapterPlan, allowed_entities: Dict[str, List[str]]) -> str:
         lines: List[str] = []
 
+        # ====== Bootstrap 注入：写作锚点（最高优先级，放在最前） ======
+        if self.story_anchors:
+            a = self.story_anchors
+            lines.append("【写作锚点（必须遵守）】")
+            if a.get("title"):
+                lines.append(f"- 作品名：{a['title']}")
+            if a.get("protagonist_name"):
+                lines.append(f"- 主角名：{a['protagonist_name']}（章节中主角名字必须是这个）")
+            if a.get("protagonist_goal"):
+                lines.append(f"- 主角目标：{a['protagonist_goal']}")
+            if a.get("personal_stakes"):
+                lines.append(f"- 私人动机：{a['personal_stakes']}")
+            if a.get("current_chapter_goal"):
+                lines.append(f"- 本章目标：{a['current_chapter_goal']}")
+            if a.get("main_question"):
+                lines.append(f"- 主线问题：{a['main_question']}")
+            if a.get("required_emotional_beat"):
+                lines.append(f"- 必须出现的情感节拍：{a['required_emotional_beat']}")
+            if a.get("world_tone"):
+                lines.append(f"- 整体基调：{a['world_tone']}")
+            forbidden = a.get("forbidden_generic_phrases") or []
+            if forbidden:
+                lines.append(f"- 禁止使用的泛化表达：{', '.join(forbidden)}")
+            lines.append("")
+
+        bible = self.world.bible
+        lines.append("【世界设定】")
+        lines.append(f"- 世界名：{getattr(bible, 'world_id', '')}")
+        if getattr(bible, "genre", ""):
+            lines.append(f"- 题材：{bible.genre}")
+        if getattr(bible, "era", ""):
+            lines.append(f"- 时代：{bible.era}")
+        if getattr(bible, "tone", ""):
+            lines.append(f"- 基调：{bible.tone}")
+        if getattr(bible, "rules", None):
+            lines.append("- 世界规则：")
+            for r in bible.rules:
+                lines.append(f"  · {r}")
+        if getattr(bible, "themes", None):
+            lines.append(f"- 主题：{', '.join(bible.themes)}")
+        lines.append("")
+
+        # 角色档案（重点突出 POV 角色）
+        lines.append("【角色档案】")
+        pov_id = plan.pov
+        for char in self.world.characters.characters:
+            tag = " ← POV 主角" if char.id == pov_id else ""
+            lines.append(f"- {char.name}（id={char.id}, 角色={char.role}）{tag}")
+            traits = char.personality.get("traits") if isinstance(char.personality, dict) else None
+            if traits:
+                lines.append(f"  · 性格：{', '.join(traits) if isinstance(traits, list) else traits}")
+            background = getattr(char, "background", None) or (
+                char.personality.get("background") if isinstance(char.personality, dict) else None
+            )
+            if background:
+                lines.append(f"  · 背景：{background}")
+            if isinstance(char.goals, dict):
+                short_term = char.goals.get("short_term")
+                long_term = char.goals.get("long_term")
+                if short_term:
+                    lines.append(f"  · 短期目标：{short_term}")
+                if long_term:
+                    lines.append(f"  · 长期目标：{long_term}")
+            if char.fears:
+                lines.append(f"  · 恐惧：{', '.join(char.fears)}")
+        lines.append("")
+
+        # 地点档案
+        if self.world.map.locations:
+            lines.append("【地点档案】")
+            for loc in self.world.map.locations[:15]:
+                desc = (loc.public_description or "").strip()
+                lines.append(f"- {loc.name}（id={loc.id}）：{desc}")
+            lines.append("")
+
         lines.append(f"【章节标题】{plan.chapter_title}")
-        lines.append(f"【POV 角色】{plan.pov}")
+        lines.append(f"【POV 角色 id】{plan.pov}")
         lines.append(f"【章节目标】{plan.chapter_goal}")
         lines.append(f"【情感曲线】{' → '.join(plan.emotional_curve)}")
         lines.append("")
-        lines.append("【重要提醒】")
-        lines.append("本章只写现实异常，超自然异常留到下一章！")
-        lines.append("节奏：紧张 → 喘息 → 紧张，不要全程高能")
-        lines.append("")
 
         lines.append("【章节结构】")
-        lines.append("每个 beat 最多包含 1-2 个异常，写完要有喘息空间：")
+        lines.append("每个 beat 最多包含 1-2 个核心事件，写完要有喘息空间：")
         lines.append("")
         for beat in plan.beats:
             lines.append(f"## {beat.beat_id}: {beat.purpose}")
@@ -426,19 +536,21 @@ class NarrativeService:
                 lines.append("→ 只给暗示，不要揭示真相")
                 lines.append("")
 
-        lines.append("【允许出现的实体】")
+        lines.append("【允许出现的实体（白名单）】")
         lines.append(f"地点：{', '.join(allowed_entities['locations'][:15])}")
         lines.append(f"物品：{', '.join(allowed_entities['objects'][:20])}")
         lines.append(f"角色：{', '.join(allowed_entities['characters'][:10])}")
+        lines.append("⚠ 严禁写出白名单之外的任何人名、地名（尤其禁止使用「林舟/老周/林玥/第七人民医院」等与本世界无关的名字）。")
         lines.append("")
 
         lines.append("【写作要求】")
-        lines.append("1. 章节长度：2000-4000 字（不要太长）")
-        lines.append("2. 每个 beat 后必须有喘息阶段，不要连续释放异常")
+        lines.append("1. 章节长度：2000-4000 字")
+        lines.append("2. 每个 beat 后必须有喘息阶段，不要连续释放高强度事件")
         lines.append("3. 心理活动占比：主角的回忆、推理、猜测要有一定篇幅")
         lines.append("4. 感官描写：视觉、听觉、嗅觉、触觉都要有")
-        lines.append("5. 细节具体：锁芯划痕、油漆气味、灰尘漂浮等")
+        lines.append("5. 细节具体，氛围由细节而非形容词撑起")
         lines.append("6. 结尾钩子：只给一点暗示，让读者想翻下一页")
+        lines.append("7. 严格遵循上面【世界设定】+【角色档案】+【白名单】")
         lines.append("")
         lines.append("开始写作：")
 

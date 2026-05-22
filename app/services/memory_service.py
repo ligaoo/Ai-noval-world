@@ -51,6 +51,9 @@ class MemoryService:
 
     def write_from_event(self, event: EventLog, state: WorldState) -> Optional[Memory]:
         """从事件自动写入记忆"""
+        if event.discovered_facts:
+            return self._write_fact_memory_from_event(event, state)
+
         # 1. plot_event / soft_hint → event_memory
         if event.event_level == "plot" or event.event_type == "soft_hint":
             return self._write_event_memory(event)
@@ -92,40 +95,40 @@ class MemoryService:
         if not event.actors:
             return None
 
-        # 从 discovered_facts 中找新发现的线索
-        for clue_id, discovered in state.world.discovered_facts.items():
-            if discovered:
-                # 检查是否已有该 fact_memory
-                existing = [
-                    m for m in self._memories
-                    if m.agent_id == event.actors[0]
-                    and m.type == MemoryType.FACT
-                    and clue_id in m.tags
-                ]
-                if existing:
-                    continue
+        clue_ids = event.discovered_facts or [
+            clue_id for clue_id, discovered in state.world.discovered_facts.items() if discovered
+        ]
+        for clue_id in clue_ids:
+            existing = [
+                m for m in self._memories
+                if m.agent_id == event.actors[0]
+                and m.type == MemoryType.FACT
+                and clue_id in m.tags
+            ]
+            if existing:
+                continue
 
-                clue = self._get_clue_by_id(clue_id)
-                if not clue:
-                    continue
+            clue = self._get_clue_by_id(clue_id)
+            if not clue:
+                continue
 
-                memory_id = f"mem_fact_{len(self._memories):04d}"
-                tags = ["fact", clue_id] + self._extract_tags_from_event(event)
+            memory_id = f"mem_fact_{len(self._memories):04d}"
+            tags = ["fact", clue_id] + self._extract_tags_from_event(event)
 
-                mem = Memory(
-                    memory_id=memory_id,
-                    agent_id=event.actors[0],
-                    type=MemoryType.FACT,
-                    time=event.time,
-                    location_id=event.location_id,
-                    content=f"确认事实：{clue.content}",
-                    tags=tags,
-                    confidence=0.95,
-                    importance=clue.importance,
-                    source_event_id=event.event_id,
-                )
-                self._save_memory(mem)
-                return mem
+            mem = Memory(
+                memory_id=memory_id,
+                agent_id=event.actors[0],
+                type=MemoryType.FACT,
+                time=event.time,
+                location_id=event.location_id,
+                content=f"确认事实：{clue.content}",
+                tags=tags,
+                confidence=0.95,
+                importance=clue.importance,
+                source_event_id=event.event_id,
+            )
+            self._save_memory(mem)
+            return mem
 
         return None
 

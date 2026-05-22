@@ -43,12 +43,23 @@ class InterventionProposal(BaseModel):
     """导演干预建议"""
     need_intervention: bool
     reason: str
-    intervention_type: str
+    intervention_type: str  # environment_hint / npc_pressure / danger_signal / clue_route_hint
     target_location: str
     content: str
     allowed_followup_actions: List[str]
     forbidden_effects: List[str]
     plot_value: PlotValue
+
+    # ===== P1 新增字段 =====
+    # 用于 InterventionDeduplicator 去重
+    hint_key: Optional[str] = None
+    # clue_route_hint 专用：让干预可以引导到具体 clue 的发现
+    target_clue_id: Optional[str] = None
+    target_object_id: Optional[str] = None
+    source_character_id: Optional[str] = None  # 这个 hint 是哪个 NPC 留下的
+    creates_object: Optional[Dict] = None
+
+    model_config = {"extra": "allow"}
 
 
 class InterventionEvent(BaseModel):
@@ -62,4 +73,5 @@ class InterventionEvent(BaseModel):
     unlocked_routes: List[str] = []
     unlocked_targets: List[str] = []
     added_topics: Dict[str, List[str]] = {}
+    created_objects: Dict[str, Dict] = {}
     plot_value: PlotValue

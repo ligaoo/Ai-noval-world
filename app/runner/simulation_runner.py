@@ -129,12 +129,25 @@ class SimulationRunner:
 
             env.plot_arc_service = plot_arc_service
 
+            # P1 新：多角色调度 + 可见性过滤
+            from app.services.multi_agent_scheduler import MultiAgentScheduler
+            from app.services.visible_event_filter import VisibleEventFilter
+            agent_scheduler = MultiAgentScheduler(world)
+            visible_filter = VisibleEventFilter()
+
             for t in range(1, tick_limit + 1):
                 state.tick = t
                 pov_id = world.chapter_goal.pov
-                character_order = [pov_id] + [cid for cid in world.characters.ids() if cid != pov_id]
+
+                # P1（plan §14）：用 MultiAgentScheduler 决定行动顺序
+                #   1) 主角 2) 同地点 NPC  3) 隐藏行动者  4) 其他
+                character_order = agent_scheduler.build_order(state)
 
                 for cid in character_order:
+                    # 若当前角色不在 state.characters 里（例如剧情杀的缺席人物），跳过
+                    if cid not in state.characters:
+                        continue
+
                     last_events = self.event_svc.read_all(sim_dir)
                     last_events_text = [f"{e.time} {e.event_type}: {e.result}" for e in last_events[-8:]]
                     ctx = agent_svc.build_context(state, cid, last_events_text=last_events_text)
@@ -157,7 +170,13 @@ class SimulationRunner:
                         action.intent = "当前阶段禁用 move，先观察现场"
                         action.expected_gain = "避免跨地点移动导致阶段偏差"
                     applied = env.apply_action(state, action)
-                    for ev in applied.new_events:
+
+                    # P1（plan §19）：VisibleEventFilter 给事件打 visible_to 标签
+                    #  - hidden_actor 的事件不会让主角直接看见
+                    filtered_events = visible_filter.filter_events(
+                        applied.new_events, pov_id, agent_scheduler
+                    )
+                    for ev in filtered_events:
                         self.event_svc.append(sim_dir, ev)
                         if memory_service:
                             memory_service.write_from_event(ev, state)

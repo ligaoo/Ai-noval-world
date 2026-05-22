@@ -128,10 +128,10 @@ class NarrativeWriterService:
         beat_id = beat.get("beat_id", "")
         content_hint = beat.get("content_hint", "")
 
-        if beat_id == "beat_last_call_memory":
-            return f"{pov_name}又想起了最后那通电话。敷衍的应答，匆忙的挂断——现在想起来，那或许是妹妹最后的求救信号。"
-        elif content_hint:
+        if content_hint:
             return f"{pov_name}想起了{content_hint}。"
+        if beat_id == "beat_last_call_memory":
+            return f"{pov_name}想起某个被自己忽略过的求助瞬间，那段记忆正在改变此刻的判断。"
         return ""
 
     @staticmethod

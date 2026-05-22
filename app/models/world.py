@@ -65,8 +65,20 @@ class CharacterProfile(BaseModel):
     fears: List[str] = Field(default_factory=list)
     secrets: List[str] = Field(default_factory=list)
     skills: Dict[str, int] = Field(default_factory=dict)
+    initial_location: Optional[str] = None
+    active_agent: bool = True
+    visibility: str = "visible"
+    narrative_function: List[str] = Field(default_factory=list)
+    personal_stakes: str = ""
+    background: str = ""
+    known_facts: List[str] = Field(default_factory=list)
+    suspicions: List[str] = Field(default_factory=list)
+    inventory: List[str] = Field(default_factory=list)
+    disclosure_policy: Dict[str, Any] = Field(default_factory=dict)
     # V5.1 新增：角色专属 LLM temperature（可选，未设置时用默认）
     llm_temperature: Optional[float] = None
+
+    model_config = {"extra": "allow"}
 
 
 class CharactersConfig(BaseModel):
@@ -213,6 +225,7 @@ class DiscoverRoute(BaseModel):
     route_id: str
     action_type: str
     target: str
+    location_id: Optional[str] = None
     topic: Optional[str] = None
     required_skill: Optional[str] = None
     difficulty: int = 0
@@ -239,6 +252,13 @@ class Clue(BaseModel):
     importance: int = 0
     discover_routes: List[DiscoverRoute] = Field(default_factory=list)
     on_discovered: OnDiscovered = Field(default_factory=OnDiscovered)
+    # Bootstrap 扩展字段（StoryBootstrapper 写入，EnvironmentEngine 消费）
+    bootstrap_fact: Optional[str] = None
+    bootstrap_inventory: Optional[str] = None
+    bootstrap_event: Optional[str] = None
+    related_thread: Optional[str] = None
+
+    model_config = {"extra": "allow"}
 
 
 class CluesConfig(BaseModel):
