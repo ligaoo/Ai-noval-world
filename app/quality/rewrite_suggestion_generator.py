@@ -242,6 +242,42 @@ class RewriteSuggestionGenerator:
                 "不能解释灵异规则",
             ],
         },
+        "placeholder_character_name": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "替换测试感或功能标签式角色名，让人物以自然姓名、身份和私人利益进入叙事。",
+            "constraints": ["不能新增角色", "不能改变角色行动结果"],
+        },
+        "weak_protagonist_private_hook": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "强化主角私人牵连，让主角不是单纯执行任务，而是被私人压力、代价或未公开动机迫使行动。",
+            "constraints": ["不能新增关键事实", "只能强化已有动机与心理反应"],
+        },
+        "functional_npc": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "为 NPC 增加私人动机、隐瞒信息和可疑微动作，避免只承担解释功能。",
+            "constraints": ["不能改变线索内容", "不能新增未配置角色"],
+        },
+        "missing_thematic_thread": {
+            "type": "enhance_suspense",
+            "rewrite_task": "enhance_suspense",
+            "message_template": "把核心母题写入意象、角色选择或环境变化中，让它成为持续悬念。",
+            "constraints": ["不能解释最终真相", "只能强化已有母题"],
+        },
+        "abstract_ending_hook": {
+            "type": "improve_hook",
+            "rewrite_task": "improve_hook",
+            "message_template": "将总结式结尾改为具体异常物、声音或动作，增强下一章牵引力。",
+            "constraints": ["不能提前揭示真相", "结尾必须是具体可感知异常"],
+        },
+        "ai_summary_phrase": {
+            "type": "reduce_overwriting",
+            "rewrite_task": "reduce_overwriting",
+            "message_template": "删除 AI 式总结或预告句，改用具体细节自然收束段落。",
+            "constraints": ["不能删除关键事件", "用动作或物象代替总结判断"],
+        },
     }
 
     def generate_suggestions(

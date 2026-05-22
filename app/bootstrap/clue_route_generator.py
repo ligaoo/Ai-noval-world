@@ -145,7 +145,7 @@ ParsedSeed:
 
     def _generate_mystery_fallback(self, parsed: ParsedSeed) -> List[BootstrapClue]:
         location = parsed.core_location or "核心地点"
-        missing = parsed.missing_person or "缺席者"
+        missing = parsed.missing_person or "关键缺口"
         supernatural = parsed.supernatural_element or "异常"
 
         return [

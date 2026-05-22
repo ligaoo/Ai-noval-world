@@ -1,0 +1,48 @@
+{
+  "arcs": [
+    {
+      "arc_id": "arc_char_linzhou",
+      "character_id": "char_linzho",
+      "character_name": "林舟",
+      "identity": "调查记者",
+      "core_desire": "找回童年记忆",
+      "psychological_wound": "童年目睹死亡却失忆",
+      "fear": "真相可能无法接受",
+      "lie": "我只是想了解医院历史",
+      "current_stage_index": 0,
+      "psychological_stages": [
+        {
+          "stage_id": "denial",
+          "stage_name": "否认",
+          "direction": "growth",
+          "description": "拒绝承认自己与旧医院有任何联系",
+          "required_experiences": [
+            "看到医院照片",
+            "触发零星记忆"
+          ]
+        },
+        {
+          "stage_id": "confusion",
+          "stage_name": "困惑",
+          "direction": "growth",
+          "description": "开始怀疑自己的记忆，但无法确定真相",
+          "required_experiences": [
+            "找到旧物品",
+            "听到传闻"
+          ]
+        },
+        {
+          "stage_id": "acceptance",
+          "stage_name": "接受",
+          "direction": "growth",
+          "description": "逐渐接受过去的真相",
+          "required_experiences": [
+            "找到证据",
+            "面对知情人"
+          ]
+        }
+      ],
+      "reflection_points": []
+    }
+  ]
+}

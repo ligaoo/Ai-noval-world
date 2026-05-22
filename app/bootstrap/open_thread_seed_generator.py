@@ -20,11 +20,11 @@ class OpenThreadSeedGenerator:
         if self.llm_client:
             threads = self._generate_with_llm(parsed)
             if threads:
-                return threads
+                return self._ensure_thematic_thread(threads, parsed)
 
         if parsed.cast_mode == "ensemble_survival":
-            return self._generate_ensemble_fallback(parsed)
-        return self._generate_mystery_fallback(parsed)
+            return self._ensure_thematic_thread(self._generate_ensemble_fallback(parsed), parsed)
+        return self._ensure_thematic_thread(self._generate_mystery_fallback(parsed), parsed)
 
     def _generate_with_llm(self, parsed: ParsedSeed) -> Optional[List[OpenThread]]:
         system = "你是悬念池生成器，必须返回 JSON array，不要输出额外解释。"
@@ -35,10 +35,11 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON array，每项字段：thread_id, question, priority, status, opened_at_chapter, related_evidence_ids。
+- 返回 JSON array，每项字段：thread_id, question, priority, status, opened_at_chapter, related_evidence_ids, thread_type, motif, thematic_keyword, payoff_hint。
 - 至少 3 条，status 固定 open，opened_at_chapter 固定 1。
-- thread_id 尽量使用 thread_recent_entry, thread_missing_trace, thread_hidden_actor_trace, thread_shared_survival_rule, thread_supernatural 这些稳定 id。
-- 内容必须从 ParsedSeed 推导；信息不足时可自行补全，但不要固定成前台抽屉钥匙、医院旧案或固定失踪亲属。
+- 如果 ParsedSeed 有 core_motif 或 motif_keywords，必须生成 1 条 thread_type=thematic 的主题悬念，追问这个母题如何改变角色对处境、目标或彼此可信度的理解。
+- thread_id 使用稳定英文 id，不要把中文剧情词直接拼入 id。
+- 内容必须从 ParsedSeed 推导；信息不足时只补结构性悬念，不要固定成某个地点、物件、旧案或亲属失踪模板。
 """
         try:
             resp = self.llm_client.chat_json(system=system, user=user, temperature=0.4)
@@ -66,7 +67,6 @@ ParsedSeed:
                 priority=10,
                 status="open",
                 opened_at_chapter=1,
-                related_evidence_ids=["ev_new_lock_core", "ev_missing_mark"],
             ),
             OpenThread(
                 thread_id="thread_hidden_actor_trace",
@@ -74,7 +74,6 @@ ParsedSeed:
                 priority=8,
                 status="open",
                 opened_at_chapter=1,
-                related_evidence_ids=["ev_fresh_footprints"],
             ),
             OpenThread(
                 thread_id="thread_group_conflict",
@@ -82,7 +81,6 @@ ParsedSeed:
                 priority=7,
                 status="open",
                 opened_at_chapter=1,
-                related_evidence_ids=["ev_missing_mark"],
             ),
             OpenThread(
                 thread_id="thread_supernatural",
@@ -95,7 +93,7 @@ ParsedSeed:
 
     def _generate_mystery_fallback(self, parsed: ParsedSeed) -> List[OpenThread]:
         location = parsed.core_location or "核心地点"
-        missing = parsed.missing_person or "缺席者"
+        missing = parsed.missing_person or "关键缺口"
         supernatural = parsed.supernatural_element or "异常"
 
         threads = [
@@ -105,7 +103,6 @@ ParsedSeed:
                 priority=10,
                 status="open",
                 opened_at_chapter=1,
-                related_evidence_ids=["ev_missing_mark"],
             ),
             OpenThread(
                 thread_id="thread_recent_entry",
@@ -117,11 +114,10 @@ ParsedSeed:
             ),
             OpenThread(
                 thread_id="thread_hidden_actor_trace",
-                question="隐藏行动者为什么要干预线索出现的顺序？",
+                question="未被看见的力量或角色正在以什么方式影响局势推进？",
                 priority=7,
                 status="open",
                 opened_at_chapter=1,
-                related_evidence_ids=["ev_fresh_footprints"],
             ),
         ]
 
@@ -134,4 +130,21 @@ ParsedSeed:
                 opened_at_chapter=1,
             ))
 
+        return threads
+
+    def _ensure_thematic_thread(self, threads: List[OpenThread], parsed: ParsedSeed) -> List[OpenThread]:
+        motif = parsed.core_motif or (parsed.motif_keywords[0] if parsed.motif_keywords else "异常")
+        if any(t.thread_type == "thematic" or t.thematic_keyword == motif for t in threads):
+            return threads
+        threads.append(OpenThread(
+            thread_id="thread_core_motif",
+            question=f"“{motif}”为什么会反复改变角色对当前处境的理解？",
+            priority=9,
+            status="open",
+            opened_at_chapter=1,
+            thread_type="thematic",
+            motif=motif,
+            thematic_keyword=motif,
+            payoff_hint=f"后续通过角色选择、线索误读或环境变化，逐步揭示“{motif}”的叙事作用。",
+        ))
         return threads

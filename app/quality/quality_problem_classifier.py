@@ -63,6 +63,12 @@ class QualityProblemClassifier:
         "metaphor_overload": {"base_severity": "low", "score_threshold": 7},
         "decorative_description": {"base_severity": "low", "score_threshold": 7},
         "weak_horror_hook": {"base_severity": "medium", "score_threshold": 5},
+        "placeholder_character_name": {"base_severity": "high", "score_threshold": 7},
+        "weak_protagonist_private_hook": {"base_severity": "high", "score_threshold": 6},
+        "functional_npc": {"base_severity": "medium", "score_threshold": 6},
+        "missing_thematic_thread": {"base_severity": "medium", "score_threshold": 6},
+        "abstract_ending_hook": {"base_severity": "high", "score_threshold": 6},
+        "ai_summary_phrase": {"base_severity": "medium", "score_threshold": 7},
     }
 
     PROBLEM_DIMENSION_MAPPING = {
@@ -91,6 +97,12 @@ class QualityProblemClassifier:
         "metaphor_overload": "style_consistency",
         "decorative_description": "style_consistency",
         "weak_horror_hook": "horror_atmosphere",
+        "placeholder_character_name": "character_depth",
+        "weak_protagonist_private_hook": "character_depth",
+        "functional_npc": "character_depth",
+        "missing_thematic_thread": "suspense",
+        "abstract_ending_hook": "chapter_hook",
+        "ai_summary_phrase": "style_consistency",
     }
 
     PROBLEM_PRIORITY_WEIGHTS = {
@@ -119,6 +131,12 @@ class QualityProblemClassifier:
         "metaphor_overload": 3,
         "decorative_description": 3,
         "weak_horror_hook": 7,
+        "placeholder_character_name": 9,
+        "weak_protagonist_private_hook": 8,
+        "functional_npc": 7,
+        "missing_thematic_thread": 7,
+        "abstract_ending_hook": 8,
+        "ai_summary_phrase": 6,
     }
 
     def classify_problems(

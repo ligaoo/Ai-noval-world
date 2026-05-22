@@ -228,6 +228,12 @@ class RewriteOptimizerService:
             "weak_horror_hook": RewriteTaskType.IMPROVE_HOOK,
             "timeline_conflict": RewriteTaskType.FIX_CONTINUITY,
             "timeline_ambiguous_statement": RewriteTaskType.FIX_CONTINUITY,
+            "placeholder_character_name": RewriteTaskType.DEEPEN_CHARACTER,
+            "weak_protagonist_private_hook": RewriteTaskType.DEEPEN_CHARACTER,
+            "functional_npc": RewriteTaskType.DEEPEN_CHARACTER,
+            "missing_thematic_thread": RewriteTaskType.ENHANCE_SUSPENSE,
+            "abstract_ending_hook": RewriteTaskType.IMPROVE_HOOK,
+            "ai_summary_phrase": RewriteTaskType.REDUCE_OVERWRITING,
         }
         return mapping.get(problem_type)
 

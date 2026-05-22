@@ -2,7 +2,7 @@
   "characters": [
     {
       "id": "char_protagonist",
-      "name": "Protagonist",
+      "name": "李高",
       "role": "protagonist",
       "personality": {
         "traits": [
@@ -12,13 +12,217 @@
       },
       "goals": {
         "short_term": "Discover the truth",
-        "long_term": "Find peace"
+        "long_term": "Discover the truth"
       },
+      "fears": [
+        "判断失误害死同伴",
+        "队伍失去互信"
+      ],
+      "secrets": [
+        "隐瞒了自己最先察觉异常的细节"
+      ],
+      "skills": {
+        "observation": 96,
+        "logic": 94
+      },
+      "initial_location": "location_gate",
+      "background": "被卷入荒废别墅异常处境的人之一，需要在信息不足时组织行动。",
+      "active_agent": true,
+      "visibility": "visible",
+      "narrative_function": [
+        "pov",
+        "group_anchor"
+      ],
+      "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": 0.3
+    },
+    {
+      "id": "char_1779432071331",
+      "name": "林梦蝶",
+      "role": "core_agent",
+      "personality": {
+        "traits": [
+          "理性",
+          "执着",
+          "脆弱"
+        ]
+      },
+      "goals": {
+        "short_term": "找到阻止噩梦蔓延的线索",
+        "long_term": "找到阻止噩梦蔓延的线索"
+      },
+      "fears": [],
+      "secrets": [],
+      "skills": {
+        "observation": 80,
+        "social": 50,
+        "courage": 60,
+        "logic": 85
+      },
+      "initial_location": "bieshuyilou-1",
+      "background": "",
+      "active_agent": true,
+      "visibility": "visible",
+      "narrative_function": [],
+      "personal_stakes": "",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": null
+    },
+    {
+      "id": "char_absent_anchor",
+      "name": "缺席者",
+      "role": "missing_person",
+      "personality": {
+        "traits": []
+      },
+      "goals": {
+        "short_term": "",
+        "long_term": ""
+      },
+      "fears": [],
+      "secrets": [],
       "skills": {
         "observation": 70,
         "logic": 65
       },
-      "initial_location": "location_001"
+      "initial_location": "location_gate",
+      "background": "曾经与荒废别墅异常有关，当前不在场，但留下的痕迹牵引主线。",
+      "active_agent": false,
+      "visibility": "absent",
+      "narrative_function": [
+        "main_thread_anchor"
+      ],
+      "personal_stakes": "",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": null
+    },
+    {
+      "id": "npc_visible_ally_1",
+      "name": "同行者甲",
+      "role": "survivor",
+      "personality": {
+        "traits": [
+          "谨慎",
+          "务实",
+          "不轻信"
+        ]
+      },
+      "goals": {
+        "short_term": "找到阁楼钥匙回到现实",
+        "long_term": "找到阁楼钥匙回到现实"
+      },
+      "fears": [
+        "被单独留下",
+        "出口规则变化"
+      ],
+      "secrets": [
+        "知道自己进入这里前漏掉了一段记忆"
+      ],
+      "skills": {
+        "observation": 70,
+        "logic": 65
+      },
+      "initial_location": "location_gate",
+      "background": "同样被困在荒废别墅附近，掌握与主角不同的第一手观察。",
+      "active_agent": true,
+      "visibility": "visible",
+      "narrative_function": [
+        "visible_companion",
+        "survival_pressure"
+      ],
+      "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": 0.45
+    },
+    {
+      "id": "npc_visible_ally_2",
+      "name": "同行者乙",
+      "role": "survivor",
+      "personality": {
+        "traits": [
+          "敏感",
+          "急躁",
+          "保护欲强"
+        ]
+      },
+      "goals": {
+        "short_term": "找到阁楼钥匙回到现实",
+        "long_term": "找到阁楼钥匙回到现实"
+      },
+      "fears": [
+        "时间耗尽",
+        "同伴互相隐瞒"
+      ],
+      "secrets": [
+        "曾在异常发生前听见过不该存在的提示"
+      ],
+      "skills": {
+        "observation": 70,
+        "logic": 65
+      },
+      "initial_location": "location_gate",
+      "background": "与其他人一起面对荒废别墅的异常，但对共同行动是否有效抱有怀疑。",
+      "active_agent": true,
+      "visibility": "visible",
+      "narrative_function": [
+        "visible_companion",
+        "conflict_source"
+      ],
+      "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": 0.55
+    },
+    {
+      "id": "npc_hidden_actor",
+      "name": "隐藏行动者",
+      "role": "hidden_actor",
+      "personality": {
+        "traits": [
+          "谨慎",
+          "果断",
+          "回避正面接触"
+        ]
+      },
+      "goals": {
+        "short_term": "在不暴露身份的情况下影响关键线索的出现顺序",
+        "long_term": "在不暴露身份的情况下影响关键线索的出现顺序"
+      },
+      "fears": [],
+      "secrets": [],
+      "skills": {
+        "observation": 70,
+        "logic": 65
+      },
+      "initial_location": "location_inner",
+      "background": "与荒废别墅的异常机制存在关联，只通过痕迹和后果影响可见角色。",
+      "active_agent": true,
+      "visibility": "hidden",
+      "narrative_function": [
+        "hidden_actor",
+        "trace_only"
+      ],
+      "personal_stakes": "",
+      "known_facts": [],
+      "suspicions": [],
+      "inventory": [],
+      "disclosure_policy": {},
+      "llm_temperature": 0.4
     }
   ]
 }

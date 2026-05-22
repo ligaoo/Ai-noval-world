@@ -16,6 +16,7 @@ class WriterStoryAnchorGenerator:
     FORBIDDEN_PHRASES = [
         "神秘之地", "发现真相", "重要的东西", "说不清的直觉",
         "有些问题只有走进去才能找到答案", "我已经做好继续走下去的准备",
+        "这一切只是开始", "更大的秘密浮出水面", "事情远没有结束", "命运的齿轮开始转动",
         "Mysterious Place", "the truth will be revealed",
     ]
 
@@ -57,8 +58,9 @@ OpeningChapterPlan:
 {json.dumps(opening.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回字段：title, protagonist_name, protagonist_goal, personal_stakes, current_chapter_goal, main_question, required_emotional_beat, forbidden_generic_phrases, world_tone。
+- 返回字段：title, protagonist_name, protagonist_goal, personal_stakes, current_chapter_goal, main_question, required_emotional_beat, protagonist_private_hook, required_interpersonal_conflict, core_motif, concrete_ending_hook, forbidden_summary_sentences, forbidden_generic_phrases, world_tone。
 - 必须承接 ParsedSeed 和 opening_chapter_plan，不要把群像生存写成单人调查。
+- concrete_ending_hook 必须是具体异常物/声音/动作；forbidden_summary_sentences 必须列出应避免的总结式收束句。
 - 如果 seed 信息不足，请自行补全叙事锚点，但不要套用固定失踪亲友、固定电话、固定旧案模板。
 """
         try:
@@ -71,6 +73,11 @@ OpeningChapterPlan:
                     text = re.sub(r"\s*```", "", text)
                 data = json.loads(text)
             data.setdefault("forbidden_generic_phrases", self.FORBIDDEN_PHRASES[:])
+            data.setdefault("forbidden_summary_sentences", [
+                "这一切只是开始",
+                "更大的秘密浮出水面",
+                "事情远没有结束",
+            ])
             return WriterStoryAnchor(**data)
         except Exception:
             return None
@@ -94,6 +101,11 @@ OpeningChapterPlan:
             current_chapter_goal=opening.chapter_function or group_goal,
             main_question=f"被卷入{location}的可见角色能否找出共同处境的规则，并在付出代价前形成协作？",
             required_emotional_beat=f"{protagonist_name}意识到这不是只属于自己的危机；每一次选择都会改变其他人的生存机会。{stakes}",
+            protagonist_private_hook=opening.protagonist_private_hook,
+            required_interpersonal_conflict=opening.required_conflict_beat,
+            core_motif=parsed.core_motif,
+            concrete_ending_hook=opening.concrete_ending_hook or (opening.ending_hook.content if opening.ending_hook else ""),
+            forbidden_summary_sentences=["这一切只是开始", "更大的秘密浮出水面", "事情远没有结束"],
             forbidden_generic_phrases=self.FORBIDDEN_PHRASES[:],
             world_tone="压迫、群体互疑、现实规则逐步失效",
         )
@@ -106,7 +118,7 @@ OpeningChapterPlan:
         protagonist_name: str,
     ) -> WriterStoryAnchor:
         location = parsed.core_location or "此处"
-        missing = parsed.missing_person or "缺席者"
+        missing = parsed.missing_person or "关键缺口"
 
         return WriterStoryAnchor(
             title=title,
@@ -114,8 +126,13 @@ OpeningChapterPlan:
             protagonist_goal=opening.protagonist_goal,
             personal_stakes=opening.personal_stakes,
             current_chapter_goal=opening.chapter_function or f"在{location}找到第一组可验证线索",
-            main_question=f"{missing}留下的痕迹是否能证明{location}的异常真实存在？",
-            required_emotional_beat=f"{protagonist_name}第一次意识到，自己追查的线索正在反过来影响当下的安全。",
+            main_question=f"围绕{missing}的矛盾信息是否能证明{location}的异常真实存在？",
+            required_emotional_beat=f"{protagonist_name}第一次意识到，自己面对的不是单纯谜题，而是会反过来影响当下选择的压力。",
+            protagonist_private_hook=opening.protagonist_private_hook,
+            required_interpersonal_conflict=opening.required_conflict_beat,
+            core_motif=parsed.core_motif,
+            concrete_ending_hook=opening.concrete_ending_hook or (opening.ending_hook.content if opening.ending_hook else ""),
+            forbidden_summary_sentences=["这一切只是开始", "更大的秘密浮出水面", "事情远没有结束"],
             forbidden_generic_phrases=self.FORBIDDEN_PHRASES[:],
             world_tone="压抑、克制、现实中透出诡异",
         )

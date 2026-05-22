@@ -28,8 +28,9 @@ class HorrorProgressionController:
         if curve_path.exists():
             with open(curve_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                allowed_fields = HorrorStage.__dataclass_fields__.keys()
                 for stage_data in data.get("progression_curve", []):
-                    stages.append(HorrorStage(**stage_data))
+                    stages.append(HorrorStage(**{k: v for k, v in stage_data.items() if k in allowed_fields}))
         return stages
 
     def get_current_stage(self, progress_ratio: float) -> HorrorStage:

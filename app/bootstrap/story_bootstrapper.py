@@ -11,6 +11,7 @@ from .clue_route_generator import ClueRouteGenerator
 from .evidence_graph_generator import EvidenceGraphGenerator
 from .minimum_cast_generator import MinimumCastGenerator
 from .models import (
+    BootstrapClue,
     BootstrapResult,
     BootstrapSeed,
     CharacterWithAgent,
@@ -65,6 +66,7 @@ class StoryBootstrapper:
         threads = self.thread_gen.generate(parsed)
         protagonist_name = next((c.name for c in cast if c.role == "protagonist"), "主角")
         opening = self.opening_gen.generate(parsed, protagonist_name=protagonist_name)
+        self._ensure_opening_selected_clues(opening, clues)
         anchors = self.anchor_gen.generate(
             title=bible.get("title", world_id),
             parsed=parsed,
@@ -99,6 +101,21 @@ class StoryBootstrapper:
 
         return result
 
+    def _ensure_opening_selected_clues(
+        self,
+        opening: OpeningChapterPlan,
+        clues: List[BootstrapClue],
+    ) -> None:
+        clue_ids = {clue.clue_id for clue in clues}
+        selected = [clue_id for clue_id in opening.selected_clues if clue_id in clue_ids]
+        discoverable = [clue.clue_id for clue in clues if clue.discover_routes]
+        for clue_id in discoverable:
+            if len(selected) >= 3:
+                break
+            if clue_id not in selected:
+                selected.append(clue_id)
+        opening.selected_clues = selected
+
     def _build_chapter_goal(self, opening: OpeningChapterPlan, cast: List[CharacterWithAgent]) -> Dict[str, Any]:
         pov = next((c.character_id for c in cast if c.role == "protagonist"), "char_protagonist")
         return {
@@ -122,6 +139,8 @@ class StoryBootstrapper:
         bible.setdefault("world_id", result.world_id)
         bible.setdefault("rules", [])
         bible.setdefault("themes", [])
+        bible.pop("draft", None)
+        bible.pop("draft_reason", None)
         with open(world_dir / "world_bible.json", "w", encoding="utf-8") as f:
             json.dump(bible, f, ensure_ascii=False, indent=2)
 
@@ -139,13 +158,19 @@ class StoryBootstrapper:
                     },
                     "fears": c.fears,
                     "secrets": c.secrets,
-                    "skills": {"observation": 70, "logic": 65},
+                    "skills": c.skills or {"observation": 70, "logic": 65},
                     "initial_location": c.location_id or "location_gate",
                     "background": c.background,
                     "active_agent": c.active_agent,
                     "visibility": c.visibility,
                     "narrative_function": c.narrative_function,
                     "personal_stakes": c.personal_stakes,
+                    "public_motive": c.public_motive,
+                    "private_motive": c.private_motive,
+                    "withheld_information": c.withheld_information,
+                    "suspicious_micro_actions": c.suspicious_micro_actions,
+                    "private_hook": c.private_hook,
+                    "emotional_core": c.emotional_core,
                     "known_facts": c.known_facts,
                     "suspicions": c.suspicions,
                     "inventory": c.inventory,
@@ -197,7 +222,7 @@ class StoryBootstrapper:
                         {
                             "route_id": f"{c.clue_id}_route_{i}",
                             "action_type": r.action,
-                            "target": r.object_id or r.location_id,
+                            "target": r.target or r.object_id or r.location_id,
                             "location_id": r.location_id,
                             "topic": r.topic,
                             "required_skill": r.required_skill,
@@ -264,6 +289,7 @@ class StoryBootstrapper:
                 "summary": result.summary_dict(),
                 "parsed_seed": result.parsed_seed.model_dump() if result.parsed_seed else None,
                 "validation": result.validation.model_dump() if result.validation else None,
+                "fusion_report": result.fusion_report,
             }, f, ensure_ascii=False, indent=2)
 
         return world_dir

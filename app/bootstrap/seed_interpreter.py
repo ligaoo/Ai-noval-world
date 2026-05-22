@@ -82,7 +82,9 @@ class SeedInterpreter:
   "ensemble_size": "如果是群像，主要活跃可见角色数量；单人故事填 1",
   "group_goal": "群体共同目标，没有则为空字符串",
   "survival_stakes": "生存代价或失败后果，没有则为空字符串",
-  "opening_mode": "开场结构：solo_arrival / group_wake_up / group_trapped / investigation_entry"
+  "opening_mode": "开场结构：solo_arrival / group_wake_up / group_trapped / investigation_entry",
+  "core_motif": "核心母题，如 缺席 / 失踪 / 替代 / 遗忘 / 循环",
+  "motif_keywords": ["从输入中提取的母题关键词"]
 }}
 """
         try:
@@ -152,6 +154,7 @@ class SeedInterpreter:
             "灵异公寓": "apartment_time_loop",
         }
         bootstrap_template = template_mapping.get(core_location, "generic_suspense")
+        core_motif, motif_keywords = self._extract_motif(user_seed, missing_person, supernatural_element)
 
         return ParsedSeed(
             genre="horror",
@@ -167,4 +170,22 @@ class SeedInterpreter:
             group_goal=group_goal,
             survival_stakes=survival_stakes,
             opening_mode=opening_mode,
+            core_motif=core_motif,
+            motif_keywords=motif_keywords,
         )
+
+    def _extract_motif(self, user_seed: str, missing_person: str, supernatural_element: str) -> tuple[str, list[str]]:
+        motif_patterns = [
+            ("缺席", r"缺席|不在场|空位|无人回应"),
+            ("失踪", r"失踪|消失|失联|找不到"),
+            ("替代", r"替代|冒充|顶替|不是本人"),
+            ("遗忘", r"遗忘|忘记|记忆|失忆|漏掉"),
+            ("循环", r"循环|重复|时间|回到"),
+        ]
+        source = f"{user_seed} {missing_person} {supernatural_element}"
+        keywords = [motif for motif, pattern in motif_patterns if re.search(pattern, source)]
+        if keywords:
+            return keywords[0], keywords
+        if missing_person:
+            return "缺席", ["缺席", "失踪"]
+        return "未知入侵", ["异常", "入侵"]

@@ -182,6 +182,7 @@ class StoryQualityEvaluatorService:
                 chapter_plan=chapter_plan,
                 chapter_draft=chapter_draft,
                 chapter_no=chapter_no,
+                open_threads=open_threads,
             )
             base_problems.extend(v11_rule_problems)
 
@@ -348,6 +349,7 @@ class StoryQualityEvaluatorService:
         chapter_plan: Dict[str, Any],
         chapter_draft: str,
         chapter_no: int,
+        open_threads: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """
         V1.1 基于规则检测质量问题
@@ -365,7 +367,7 @@ class StoryQualityEvaluatorService:
                 "type": "clue_overload",
                 "problem_id": "v11_clue_overload",
                 "message": f"章节线索数量 ({len(selected_clues)}) 超过预算 ({max_clues})",
-                "evidence": [f"选中线索: {[c.get('clue_id', '') for c in selected_clues]}"],
+                "evidence": [f"选中线索: {[c.get('clue_id', '') if isinstance(c, dict) else str(c) for c in selected_clues]}"],
                 "can_be_rewritten": True,
             })
 
@@ -418,6 +420,83 @@ class StoryQualityEvaluatorService:
                     "problem_id": "v11_weak_hook",
                     "message": "第一章结尾缺少轻异常钩子",
                     "evidence": ["未检测到 ending_hook 配置"],
+                    "can_be_rewritten": True,
+                })
+
+        placeholder_names = ["同行者甲", "同行者乙", "知情者甲", "目击者乙", "缺席者", "隐藏行动者", "NPC1", "NPC2", "神秘人"]
+        found_placeholders = [name for name in placeholder_names if name in chapter_draft or name in json.dumps(chapter_plan, ensure_ascii=False)]
+        if found_placeholders:
+            problems.append({
+                "type": "placeholder_character_name",
+                "problem_id": "narrative_placeholder_name",
+                "message": "章节或计划中仍存在测试感/功能标签式角色名。",
+                "evidence": found_placeholders,
+                "can_be_rewritten": True,
+            })
+
+        if chapter_no == 1:
+            private_hook = chapter_plan.get("protagonist_private_hook") or chapter_plan.get("private_hook") or ""
+            private_hook_markers = ["私人", "代价", "不能", "害怕", "隐瞒", "不愿", "必须", "失去", "保护", "承认"]
+            if not private_hook and not any(word in chapter_draft for word in private_hook_markers):
+                problems.append({
+                    "type": "weak_protagonist_private_hook",
+                    "problem_id": "narrative_weak_private_hook",
+                    "message": "第一章缺少主角私人牵连，行动像普通任务而不是无法回避的个人危机。",
+                    "evidence": ["未检测到 protagonist_private_hook 或私人牵连关键词"],
+                    "can_be_rewritten": True,
+                })
+
+        npc_depth_markers = ["隐瞒", "迟疑", "避开", "私下", "害怕", "不愿", "停顿", "攥", "退后"]
+        if chapter_no == 1 and sum(chapter_draft.count(marker) for marker in npc_depth_markers) < 3:
+            problems.append({
+                "type": "functional_npc",
+                "problem_id": "narrative_functional_npc",
+                "message": "NPC 反应偏功能化，缺少私人动机、隐瞒或可疑微动作。",
+                "evidence": ["人物隐瞒/迟疑/微动作标记不足"],
+                "can_be_rewritten": True,
+            })
+
+        thematic_threads = [t for t in (open_threads or []) if t.get("thread_type") == "thematic" or t.get("thematic_keyword") or t.get("motif")]
+        motif = ""
+        if thematic_threads:
+            motif = thematic_threads[0].get("thematic_keyword") or thematic_threads[0].get("motif") or ""
+        if chapter_no == 1 and open_threads is not None and not thematic_threads:
+            problems.append({
+                "type": "missing_thematic_thread",
+                "problem_id": "narrative_missing_thematic_thread",
+                "message": "缺少围绕核心母题的 thematic OpenThread。",
+                "evidence": ["open_threads 中未发现 thread_type=thematic 或 motif 字段"],
+                "can_be_rewritten": True,
+            })
+        elif motif and motif not in chapter_draft:
+            problems.append({
+                "type": "missing_thematic_thread",
+                "problem_id": "narrative_motif_not_in_draft",
+                "message": "核心母题没有进入章节文本，悬念停留在配置层。",
+                "evidence": [f"母题未出现在正文：{motif}"],
+                "can_be_rewritten": True,
+            })
+
+        summary_phrases = ["这一切只是开始", "更大的秘密浮出水面", "事情远没有结束", "命运的齿轮", "真正的考验才刚刚开始"]
+        found_summary = [phrase for phrase in summary_phrases if phrase in chapter_draft]
+        if found_summary:
+            problems.append({
+                "type": "ai_summary_phrase",
+                "problem_id": "narrative_ai_summary_phrase",
+                "message": "存在 AI 式总结/预告句，削弱小说质感。",
+                "evidence": found_summary,
+                "can_be_rewritten": True,
+            })
+
+        ending_tail = chapter_draft[-240:] if chapter_draft else ""
+        concrete_markers = ["看见", "听见", "摸到", "闻到", "亮起", "熄灭", "移动", "停住", "裂开", "变冷", "变热", "震动", "响", "落下"]
+        if chapter_no == 1 and any(phrase in ending_tail for phrase in summary_phrases + ["真相", "阴谋", "秘密"]):
+            if not any(marker in ending_tail for marker in concrete_markers):
+                problems.append({
+                    "type": "abstract_ending_hook",
+                    "problem_id": "narrative_abstract_ending_hook",
+                    "message": "结尾钩子偏总结化，没有落在具体异常物、声音或动作上。",
+                    "evidence": [ending_tail.strip()],
                     "can_be_rewritten": True,
                 })
 

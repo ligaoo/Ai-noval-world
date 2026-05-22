@@ -1,0 +1,41 @@
+[
+  {
+    "evidence_id": "ev_new_lock_core",
+    "title": "崭新的门锁",
+    "type": "物证",
+    "truth_relevance": "高",
+    "purpose": "暗示别墅的封闭性",
+    "related_thread": "别墅封锁",
+    "can_mislead": true,
+    "real_meaning": "超自然力量封锁了出口",
+    "allowed_reveal_chapters": [
+      1
+    ]
+  },
+  {
+    "evidence_id": "ev_fresh_footprints",
+    "title": "新鲜脚印",
+    "type": "痕迹",
+    "truth_relevance": "中",
+    "purpose": "显示有人近期活动",
+    "related_thread": "缺席者",
+    "can_mislead": true,
+    "real_meaning": "是缺席者留下的痕迹",
+    "allowed_reveal_chapters": [
+      1
+    ]
+  },
+  {
+    "evidence_id": "ev_missing_mark",
+    "title": "缺席者的标记",
+    "type": "符号",
+    "truth_relevance": "高",
+    "purpose": "提示缺席者的存在",
+    "related_thread": "缺席者线索",
+    "can_mislead": false,
+    "real_meaning": "标记指向阁楼钥匙的秘密",
+    "allowed_reveal_chapters": [
+      1
+    ]
+  }
+]

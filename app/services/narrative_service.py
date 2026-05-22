@@ -453,11 +453,22 @@ class NarrativeService:
                 lines.append(f"- 主线问题：{a['main_question']}")
             if a.get("required_emotional_beat"):
                 lines.append(f"- 必须出现的情感节拍：{a['required_emotional_beat']}")
+            if a.get("protagonist_private_hook"):
+                lines.append(f"- 主角私人钩子：{a['protagonist_private_hook']}")
+            if a.get("required_interpersonal_conflict"):
+                lines.append(f"- 必须出现的人际冲突：{a['required_interpersonal_conflict']}")
+            if a.get("core_motif"):
+                lines.append(f"- 核心母题：{a['core_motif']}，本章要用重复意象、角色选择或环境变化让它成为悬念，而不是口号")
+            if a.get("concrete_ending_hook"):
+                lines.append(f"- 结尾必须落在这个具体异常上：{a['concrete_ending_hook']}")
             if a.get("world_tone"):
                 lines.append(f"- 整体基调：{a['world_tone']}")
             forbidden = a.get("forbidden_generic_phrases") or []
             if forbidden:
                 lines.append(f"- 禁止使用的泛化表达：{', '.join(forbidden)}")
+            forbidden_summary = a.get("forbidden_summary_sentences") or []
+            if forbidden_summary:
+                lines.append(f"- 禁止用作结尾或段落收束的总结句：{', '.join(forbidden_summary)}")
             lines.append("")
 
         bible = self.world.bible
@@ -500,6 +511,25 @@ class NarrativeService:
                     lines.append(f"  · 长期目标：{long_term}")
             if char.fears:
                 lines.append(f"  · 恐惧：{', '.join(char.fears)}")
+            public_motive = getattr(char, "public_motive", "")
+            private_motive = getattr(char, "private_motive", "")
+            withheld_information = getattr(char, "withheld_information", "")
+            suspicious_micro_actions = getattr(char, "suspicious_micro_actions", [])
+            private_hook = getattr(char, "private_hook", "")
+            emotional_core = getattr(char, "emotional_core", "")
+            if public_motive:
+                lines.append(f"  · 公开动机：{public_motive}")
+            if private_motive:
+                lines.append(f"  · 私人动机：{private_motive}")
+            if withheld_information:
+                lines.append(f"  · 隐瞒信息：{withheld_information}")
+            if suspicious_micro_actions:
+                actions = suspicious_micro_actions if isinstance(suspicious_micro_actions, list) else [str(suspicious_micro_actions)]
+                lines.append(f"  · 可疑微动作：{'；'.join(actions)}")
+            if private_hook:
+                lines.append(f"  · 私人钩子：{private_hook}")
+            if emotional_core:
+                lines.append(f"  · 情感核心：{emotional_core}")
         lines.append("")
 
         # 地点档案
@@ -549,8 +579,10 @@ class NarrativeService:
         lines.append("3. 心理活动占比：主角的回忆、推理、猜测要有一定篇幅")
         lines.append("4. 感官描写：视觉、听觉、嗅觉、触觉都要有")
         lines.append("5. 细节具体，氛围由细节而非形容词撑起")
-        lines.append("6. 结尾钩子：只给一点暗示，让读者想翻下一页")
-        lines.append("7. 严格遵循上面【世界设定】+【角色档案】+【白名单】")
+        lines.append("6. 结尾钩子：只给一个具体异常物、声音或动作，不要用总结句收束")
+        lines.append("7. NPC 对话不能只解释设定，必须同时暴露立场、恐惧、隐瞒或私人利益")
+        lines.append("8. 每个关键线索至少绑定一个人物反应或关系裂缝")
+        lines.append("9. 严格遵循上面【世界设定】+【角色档案】+【白名单】")
         lines.append("")
         lines.append("开始写作：")
 

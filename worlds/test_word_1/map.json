@@ -1,24 +1,128 @@
 {
   "locations": [
     {
-      "id": "location_001",
-      "name": "Starting Point",
-      "public_description": "The place where the story begins.",
+      "id": "bieshuyilou-1",
+      "name": "别墅一楼卫生间",
+      "public_description": "卫生间",
       "objects": [],
       "connected_to": [
-        "location_002"
+        "bieshuyikou2"
+      ],
+      "danger_level": 2
+    },
+    {
+      "id": "bieshuyikou2",
+      "name": "杂物间",
+      "public_description": "存放杂物的地方",
+      "objects": [],
+      "connected_to": [],
+      "danger_level": 2
+    },
+    {
+      "id": "location_gate",
+      "name": "荒废别墅入口",
+      "public_description": "荒废别墅入口：连接外部与核心区域的边界，状态与表面印象并不完全一致。",
+      "objects": [
+        {
+          "id": "obj_gate_lock",
+          "name": "obj_gate_lock",
+          "visible": true,
+          "state": "",
+          "description": "荒废别墅入口处的边界痕迹，与长期无人接触的表象不一致。"
+        }
+      ],
+      "connected_to": [
+        "location_frontdesk",
+        "location_witness_point"
       ],
       "danger_level": 1
     },
     {
-      "id": "location_002",
-      "name": "Mysterious Place",
-      "public_description": "A place full of mysteries.",
-      "objects": [],
+      "id": "location_frontdesk",
+      "name": "荒废别墅前区",
+      "public_description": "荒废别墅前区：可探索区域，细节里残留着尚未解释的变化。",
+      "objects": [
+        {
+          "id": "obj_frontdesk_drawer",
+          "name": "obj_frontdesk_drawer",
+          "visible": true,
+          "state": "",
+          "description": "一个可搜索的遗留容器，里面可能压着推进下一步行动的线索物。"
+        }
+      ],
       "connected_to": [
-        "location_001"
+        "location_gate",
+        "location_hallway"
+      ],
+      "danger_level": 1
+    },
+    {
+      "id": "location_hallway",
+      "name": "荒废别墅内部通道",
+      "public_description": "荒废别墅内部通道：可探索区域，细节里残留着尚未解释的变化。",
+      "objects": [
+        {
+          "id": "obj_fresh_footprints",
+          "name": "obj_fresh_footprints",
+          "visible": true,
+          "state": "",
+          "description": "一组近期留下的行动痕迹，方向避开了最直接的安全路径。"
+        }
+      ],
+      "connected_to": [
+        "location_frontdesk",
+        "location_archive",
+        "location_basement"
+      ],
+      "danger_level": 1
+    },
+    {
+      "id": "location_archive",
+      "name": "荒废别墅记录室",
+      "public_description": "荒废别墅记录室：保存着旧记录或遗留信息，部分痕迹显示近期有人接触过。",
+      "objects": [
+        {
+          "id": "obj_missing_file",
+          "name": "obj_missing_file",
+          "visible": true,
+          "state": "",
+          "description": "保存记录的位置出现缺口，像是有信息被取走或替换。"
+        }
+      ],
+      "connected_to": [
+        "location_hallway"
       ],
       "danger_level": 2
+    },
+    {
+      "id": "location_basement",
+      "name": "荒废别墅深处入口",
+      "public_description": "荒废别墅深处入口：再往里风险明显升高，环境反馈也更不稳定。",
+      "objects": [],
+      "connected_to": [
+        "location_hallway"
+      ],
+      "danger_level": 4
+    },
+    {
+      "id": "location_witness_point",
+      "name": "荒废别墅外围观察点",
+      "public_description": "荒废别墅外围观察点：位于核心区域外围，能提供不同角度的观察。",
+      "objects": [],
+      "connected_to": [
+        "location_gate"
+      ],
+      "danger_level": 0
+    },
+    {
+      "id": "location_inner",
+      "name": "荒废别墅隐藏隔间",
+      "public_description": "荒废别墅隐藏隔间：不在普通路径上，只会通过痕迹和后果影响可见角色。",
+      "objects": [],
+      "connected_to": [
+        "location_basement"
+      ],
+      "danger_level": 3
     }
   ]
 }

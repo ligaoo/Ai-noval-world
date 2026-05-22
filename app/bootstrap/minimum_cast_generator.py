@@ -24,11 +24,11 @@ class MinimumCastGenerator:
         if self.llm_client:
             cast = self._generate_with_llm(parsed, gate_location_id)
             if cast:
-                return cast
+                return self._polish_cast(cast, parsed)
 
         if parsed.cast_mode == "ensemble_survival":
-            return self._generate_ensemble_fallback(parsed, gate_location_id)
-        return self._generate_investigation_fallback(parsed, gate_location_id)
+            return self._polish_cast(self._generate_ensemble_fallback(parsed, gate_location_id), parsed)
+        return self._polish_cast(self._generate_investigation_fallback(parsed, gate_location_id), parsed)
 
     def _generate_with_llm(
         self,
@@ -44,7 +44,10 @@ ParsedSeed:
 
 硬性要求：
 - 返回 JSON array。
-- 每个对象字段必须兼容：character_id, name, role, active_agent, location_id, goal, personal_stakes, known_facts, suspicions, inventory, personality_traits, fears, secrets, background, narrative_function, visibility, llm_temperature。
+- 每个对象字段必须兼容：character_id, name, role, active_agent, location_id, goal, personal_stakes, public_motive, private_motive, withheld_information, suspicious_micro_actions, private_hook, emotional_core, known_facts, suspicions, inventory, personality_traits, fears, secrets, background, narrative_function, visibility, llm_temperature。
+- 禁止使用“同行者甲/乙”“缺席者”“隐藏行动者”“知情者甲”“目击者乙”“NPC1”等测试感或功能标签式姓名；必须使用自然中文姓名或带具体职业/关系的称谓。
+- 每个 visible NPC 必须有公开目标、私人动机、隐瞒信息，以及至少 1 个容易被主角误读的 suspicious_micro_actions。
+- hidden_actor 必须有具体身份、利益目标和可追踪痕迹，不能只是“幕后黑手”。
 - 必须有 1 个 role=protagonist 且 active_agent=true。
 - 必须有 1 个 active_agent=false 且 visibility=absent 的缺席/背景钩子角色。
 - 必须至少有 2 个 visible active NPC；如果 cast_mode 是 ensemble_survival，这些 NPC 必须是共同处境中的可见同伴，而不是只在远处提供信息的人。
@@ -115,7 +118,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_visible_ally_1",
-                name="同行者甲",
+                name="被卷入的同行者",
                 role="survivor",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -130,7 +133,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_visible_ally_2",
-                name="同行者乙",
+                name="持异议的同行者",
                 role="survivor",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -145,7 +148,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_hidden_actor",
-                name="隐藏行动者",
+                name="未露面的行动者",
                 role="hidden_actor",
                 active_agent=True,
                 visibility="hidden",
@@ -194,7 +197,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_gatekeeper",
-                name="知情者甲",
+                name="守口如瓶的知情人",
                 role="gatekeeper",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -214,7 +217,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_witness",
-                name="目击者乙",
+                name="不安的信息提供者",
                 role="witness",
                 active_agent=True,
                 location_id="location_witness_point",
@@ -226,7 +229,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_hidden_actor",
-                name="隐藏行动者",
+                name="未露面的行动者",
                 role="hidden_actor",
                 active_agent=True,
                 visibility="hidden",
@@ -240,7 +243,44 @@ ParsedSeed:
         ]
 
     def _absent_name(self, parsed: ParsedSeed) -> str:
-        name = parsed.missing_person or "缺席者"
+        name = parsed.missing_person or "主线关联者"
         if " " in name:
             name = name.split()[-1]
         return name
+
+    def _polish_cast(self, cast: List[CharacterWithAgent], parsed: ParsedSeed) -> List[CharacterWithAgent]:
+        role_names = {
+            "protagonist": "主要视角角色",
+            "missing_person": self._absent_name(parsed),
+            "hidden_actor": "未露面的行动者",
+            "gatekeeper": "守口如瓶的知情人",
+            "witness": "不安的目击者",
+            "survivor": "被卷入的同行者",
+        }
+        invalid_names = {"主角", "同行者甲", "同行者乙", "知情者甲", "目击者乙", "隐藏行动者", "缺席者", "失踪者", "神秘人", "NPC", "NPC1", "NPC2"}
+        motif = parsed.core_motif or "异常"
+        location = parsed.core_location or "现场"
+        used_names = set()
+        for index, character in enumerate(cast, start=1):
+            if character.name in invalid_names or not character.name.strip():
+                base_name = role_names.get(character.role, "关键角色")
+                character.name = base_name if base_name not in used_names else f"{base_name}{index}"
+            used_names.add(character.name)
+            if not character.public_motive:
+                character.public_motive = character.goal or f"在{location}中维持表面秩序"
+            if not character.private_motive:
+                if character.role == "protagonist":
+                    character.private_motive = f"弄清自己为什么会被{motif}持续牵动，并避免这个弱点影响判断"
+                elif character.visibility == "hidden":
+                    character.private_motive = f"控制他人接近{motif}核心含义的速度，以保护自身利益"
+                else:
+                    character.private_motive = f"隐瞒自己与{motif}有关的一段经历，避免被其他人怀疑"
+            if not character.withheld_information:
+                character.withheld_information = f"掌握一段会改变他人对{motif}理解的信息，但暂时不愿公开"
+            if not character.suspicious_micro_actions:
+                character.suspicious_micro_actions = [f"当话题触及{motif}时短暂停顿，并调整自己的说法"]
+            if not character.private_hook:
+                character.private_hook = character.private_motive
+            if not character.emotional_core:
+                character.emotional_core = character.personal_stakes or character.private_motive
+        return cast

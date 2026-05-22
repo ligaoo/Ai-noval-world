@@ -37,8 +37,8 @@ ParsedSeed:
 硬性要求：
 - 返回 JSON array，每项字段：evidence_id, title, type, truth_relevance, purpose, related_thread, can_mislead, real_meaning, allowed_reveal_chapters。
 - 至少 3 条证据，必须能支撑第一章线索和 truth_chain 的 surface 阶段。
-- evidence_id 请稳定使用 ev_new_lock_core, ev_fresh_footprints, ev_missing_mark 中至少三个，方便现有线索绑定。
-- 内容必须从 ParsedSeed 推导；信息不足时可自行补全，但不要固定成医院旧案、十年前事故、前台钥匙或固定亲属失踪。
+- evidence_id 使用稳定英文 id；如需与现有 clue fallback 兼容，可使用 ev_new_lock_core、ev_fresh_footprints、ev_key_signal，但不要让 id 绑定固定剧情含义。
+- 内容必须从 ParsedSeed 推导；信息不足时只补充结构性证据，不要固定成某个地点、旧案、物件或亲属失踪模板。
 """
         try:
             resp = self.llm_client.chat_json(system=system, user=user, temperature=0.45)
@@ -82,7 +82,7 @@ ParsedSeed:
                 allowed_reveal_chapters=[1, 4],
             ),
             EvidenceItem(
-                evidence_id="ev_missing_mark",
+                evidence_id="ev_key_signal",
                 title="共同处境的标记",
                 type="shared_signal",
                 truth_relevance="minor",
@@ -96,7 +96,7 @@ ParsedSeed:
 
     def _generate_mystery_fallback(self, parsed: ParsedSeed) -> List[EvidenceItem]:
         location = parsed.core_location or "核心地点"
-        missing = parsed.missing_person or "缺席者"
+        missing = parsed.missing_person or "关键缺口"
 
         return [
             EvidenceItem(
@@ -122,7 +122,7 @@ ParsedSeed:
                 allowed_reveal_chapters=[1, 4],
             ),
             EvidenceItem(
-                evidence_id="ev_missing_mark",
+                evidence_id="ev_key_signal",
                 title=f"{missing}相关标记",
                 type="personal_trace",
                 truth_relevance="minor",

@@ -267,6 +267,74 @@
       </div>
     </div>
 
+    <!-- 自动补全 -->
+    <div style="background: rgba(42, 45, 53, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; margin-bottom: 32px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 12px;">
+            <Zap style="width: 24px; height: 24px; color: #a855f7;" />
+            Bootstrap 自动补全
+          </h3>
+          <p style="color: #9ca3af; font-size: 14px; margin-top: 6px;">保存当前手动草稿，用 Bootstrap 补齐缺失 NPC、隐藏行动者、地图、线索和开场目标。</p>
+        </div>
+        <button
+          @click="completeCurrentWorld"
+          :disabled="isCompletingWorld || !selectedWorldId"
+          style="background: linear-gradient(135deg, #a855f7, #ec4899); color: white; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-size: 14px; min-width: 180px;"
+        >
+          {{ isCompletingWorld ? '补全中...' : '自动补全为正式世界' }}
+        </button>
+      </div>
+
+      <textarea
+        v-model="completionSeed"
+        rows="2"
+        placeholder="可选：补充你希望保留或强化的方向，例如：NPC 都与失踪案有关，但每个人只知道一部分真相。"
+        style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 12px 16px; border-radius: 12px; outline: none; resize: vertical; margin-bottom: 16px;"
+      ></textarea>
+
+      <div v-if="completionResult" style="background: rgba(28, 30, 36, 0.7); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; padding: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <div style="font-weight: 600; color: #f3f4f6;">补全候选：{{ completionResult.title || completionResult.world_id }}</div>
+            <div :style="{ color: completionResult.validation?.passed ? '#10b981' : '#ef4444', fontSize: '14px', marginTop: '4px' }">
+              {{ completionResult.validation?.passed ? '校验通过，可确认写入' : '校验未通过，请查看问题' }}
+            </div>
+          </div>
+          <button
+            @click="confirmCompletion"
+            :disabled="isConfirmingCompletion || !completionResult.validation?.passed"
+            style="background: #10b981; color: white; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-size: 14px;"
+          >
+            {{ isConfirmingCompletion ? '写入中...' : '确认写入' }}
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; color: #d1d5db; font-size: 13px;">
+          <div>
+            <div style="color: #10b981; font-weight: 600; margin-bottom: 6px;">保留用户内容</div>
+            <div>角色：{{ completionResult.fusion_report?.preserved?.characters?.length || 0 }}</div>
+            <div>地点：{{ completionResult.fusion_report?.preserved?.locations?.length || 0 }}</div>
+            <div>线索：{{ completionResult.fusion_report?.preserved?.clues?.length || 0 }}</div>
+          </div>
+          <div>
+            <div style="color: #a855f7; font-weight: 600; margin-bottom: 6px;">自动新增</div>
+            <div>角色/NPC：{{ completionResult.fusion_report?.generated?.characters?.length || 0 }}</div>
+            <div>地点：{{ completionResult.fusion_report?.generated?.locations?.length || 0 }}</div>
+            <div>线索：{{ completionResult.fusion_report?.generated?.clues?.length || 0 }}</div>
+          </div>
+          <div>
+            <div style="color: #f59e0b; font-weight: 600; margin-bottom: 6px;">自动修复</div>
+            <div>{{ completionResult.fusion_report?.repaired?.length || 0 }} 项引用/路线修复</div>
+          </div>
+        </div>
+
+        <div v-if="completionResult.validation?.issues?.length" style="margin-top: 12px; color: #fca5a5; font-size: 13px;">
+          <div v-for="issue in completionResult.validation.issues" :key="issue.message || issue" style="margin-top: 4px;">- {{ issue.message || issue }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 配置验证 -->
     <div style="background: rgba(42, 45, 53, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px;">
       <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
@@ -408,6 +476,10 @@ const availableWorlds = ref([])
 const selectedWorldId = ref('')
 const showCreateDialog = ref(false)
 const isCreatingWorld = ref(false)
+const isCompletingWorld = ref(false)
+const isConfirmingCompletion = ref(false)
+const completionResult = ref(null)
+const completionSeed = ref('')
 
 // 创建新世界的表单数据
 const newWorldForm = ref({
@@ -429,6 +501,23 @@ const loadWorldsList = async () => {
   }
 }
 
+const formatApiError = (payload, fallback) => {
+  const detail = payload?.detail ?? payload?.message ?? payload
+  if (!detail) return fallback
+  if (typeof detail === 'string') return detail
+
+  const parts = []
+  if (detail.message) parts.push(detail.message)
+  if (Array.isArray(detail.issues) && detail.issues.length > 0) {
+    parts.push(`问题：\n${detail.issues.map(issue => `- ${issue}`).join('\n')}`)
+  }
+  if (Array.isArray(detail.warnings) && detail.warnings.length > 0) {
+    parts.push(`警告：\n${detail.warnings.map(warning => `- ${warning}`).join('\n')}`)
+  }
+
+  return parts.length > 0 ? parts.join('\n\n') : JSON.stringify(detail)
+}
+
 // 加载选中的世界
 const loadSelectedWorld = async () => {
   if (!selectedWorldId.value) return
@@ -444,7 +533,8 @@ const loadSelectedWorld = async () => {
     worldStore.locations = worldData.map?.locations || []
     worldStore.clues = worldData.clues?.clues || []
     worldStore.plotArcs = worldData.plot_arcs?.arcs || worldData.plot_arcs || []
-    
+    completionResult.value = null
+
     alert(`✅ 已加载世界: ${worldStore.worldBible.title}`)
   } catch (error) {
     console.error('加载世界失败:', error)
@@ -476,8 +566,8 @@ const createNewWorld = async () => {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || '创建失败')
+      const error = await response.json().catch(() => null)
+      throw new Error(formatApiError(error, '创建失败'))
     }
 
     const result = await response.json()
@@ -606,6 +696,95 @@ const goTo = (path) => {
 const isSimulating = ref(false)
 const simulationResult = ref(null)
 
+const saveCurrentWorldDraft = async () => {
+  const currentWorldId = selectedWorldId.value || worldBible.value.world_id
+  if (!currentWorldId) throw new Error('请先选择一个世界')
+
+  const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      world_bible: worldStore.worldBible,
+      characters: worldStore.characters,
+      map: worldStore.locations,
+      clues: worldStore.clues,
+      plot_arcs: worldStore.plotArcs,
+      character_arcs: worldStore.characterArcs,
+      chapter_goal: {},
+    })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null)
+    throw new Error(formatApiError(error, '保存草稿失败'))
+  }
+
+  return currentWorldId
+}
+
+const completeCurrentWorld = async () => {
+  if (isCompletingWorld.value) return
+  isCompletingWorld.value = true
+  completionResult.value = null
+
+  try {
+    const currentWorldId = await saveCurrentWorldDraft()
+    const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_seed: completionSeed.value || null,
+        target_genre: worldBible.value.genre || 'horror_suspense',
+        target_words: 100000,
+        auto_confirm: false,
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => null)
+      throw new Error(formatApiError(error, '自动补全失败'))
+    }
+
+    completionResult.value = await response.json()
+  } catch (error) {
+    console.error('自动补全失败:', error)
+    alert(`❌ 自动补全失败\n\n${error.message}`)
+  } finally {
+    isCompletingWorld.value = false
+  }
+}
+
+const confirmCompletion = async () => {
+  if (!completionResult.value?.bootstrap_id || isConfirmingCompletion.value) return
+  isConfirmingCompletion.value = true
+
+  try {
+    const response = await fetch(`http://localhost:8421/api/story/bootstrap/${completionResult.value.bootstrap_id}/confirm`, {
+      method: 'POST'
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => null)
+      throw new Error(formatApiError(error, '确认写入失败'))
+    }
+
+    await loadWorldsList()
+    selectedWorldId.value = completionResult.value.world_id
+    await loadSelectedWorld()
+    completionResult.value = null
+    alert('✅ 世界已补全并写入，现在可以正式运行模拟')
+  } catch (error) {
+    console.error('确认补全失败:', error)
+    alert(`❌ 确认写入失败\n\n${error.message}`)
+  } finally {
+    isConfirmingCompletion.value = false
+  }
+}
+
 const startSimulation = async () => {
   if (isSimulating.value) return
   
@@ -627,6 +806,12 @@ const startSimulation = async () => {
       return
     }
 
+    const selectedWorld = availableWorlds.value.find(world => world.id === currentWorldId)
+    if (selectedWorld && selectedWorld.formal_run_ready === false) {
+      const issues = selectedWorld.formal_run_issues || []
+      throw new Error(`当前世界尚未满足正式运行条件，请先点击“自动补全为正式世界”。${issues.length > 0 ? `\n\n问题：\n${issues.map(issue => `- ${issue}`).join('\n')}` : ''}`)
+    }
+
     // 1. 启动模拟
     const response = await fetch('http://localhost:8421/api/simulations/run', {
       method: 'POST',
@@ -635,8 +820,6 @@ const startSimulation = async () => {
       },
       body: JSON.stringify({
         world_id: currentWorldId,
-        mode: 'llm',
-        v2_phase: 'v2.3',
         seed: 12345,
         genre_id: 'horror',
         target_chapters: 10,
@@ -645,8 +828,8 @@ const startSimulation = async () => {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || '启动模拟失败')
+      const error = await response.json().catch(() => null)
+      throw new Error(formatApiError(error, '启动模拟失败'))
     }
 
     const startResult = await response.json()

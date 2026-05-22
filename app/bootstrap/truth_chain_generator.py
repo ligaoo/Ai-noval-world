@@ -88,7 +88,7 @@ ParsedSeed:
                         f"{group_goal}需要可验证线索，而不是只靠直觉",
                     ],
                     forbidden_information=[
-                        "隐藏行动者真实身份",
+                        "未公开行动者的身份或性质",
                         "最终代价的完整形式",
                     ],
                 ),
@@ -96,7 +96,7 @@ ParsedSeed:
                     stage="major",
                     chapter_range=[16, 24],
                     allowed_information=[
-                        "隐藏行动者一直在改变线索出现顺序",
+                        "未公开行动者一直在改变线索出现顺序",
                         "至少一个成员的隐瞒会影响所有人的生存路径",
                     ],
                     forbidden_information=[
@@ -108,7 +108,7 @@ ParsedSeed:
                     chapter_range=[25, 30],
                     allowed_information=[
                         f"{supernatural}的真实运行机制",
-                        "隐藏行动者影响群体的原因",
+                        "未公开行动者影响群体的原因",
                         f"众人能否达成{group_goal}的最终条件",
                     ],
                     forbidden_information=[],
@@ -118,14 +118,14 @@ ParsedSeed:
 
     def _generate_mystery_fallback(self, parsed: ParsedSeed) -> TruthChain:
         location = parsed.core_location or "核心地点"
-        missing = parsed.missing_person or "缺席者"
+        missing = parsed.missing_person or "关键缺口"
         supernatural = parsed.supernatural_element or "异常现象"
 
         return TruthChain(
             truth_id=f"truth_{parsed.bootstrap_template or 'main'}",
             final_truth=(
                 f"{location}中的{supernatural}并非孤立现象；它与被隐藏的关键事件、"
-                f"缺席者{missing}留下的线索以及隐藏行动者的干预共同构成真相。"
+                f"围绕{missing}的矛盾信息以及未公开力量的干预共同构成真相。"
             ),
             reveal_steps=[
                 TruthRevealStage(
@@ -138,7 +138,7 @@ ParsedSeed:
                     ],
                     forbidden_information=[
                         f"{supernatural}的真实来源",
-                        "隐藏行动者真实身份",
+                        "未公开行动者的身份或性质",
                     ],
                 ),
                 TruthRevealStage(
@@ -158,7 +158,7 @@ ParsedSeed:
                     chapter_range=[16, 24],
                     allowed_information=[
                         f"{missing}曾接近核心真相",
-                        "主角的目标与隐藏行动者的目标发生直接冲突",
+                        "主角的目标与未公开行动者的目标发生直接冲突",
                     ],
                     forbidden_information=[
                         "最终真相的全部因果",
@@ -169,7 +169,7 @@ ParsedSeed:
                     chapter_range=[25, 30],
                     allowed_information=[
                         f"{supernatural}的真实来源",
-                        "隐藏行动者的真实目的",
+                        "未公开行动者的真实目的",
                         f"{missing}缺席的真正原因",
                     ],
                     forbidden_information=[],

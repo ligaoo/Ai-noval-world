@@ -1,20 +1,128 @@
 {
   "clues": [
     {
-      "id": "clue_001",
-      "name": "First Clue",
-      "content": "This is the first clue to start your story.",
+      "id": "clue_new_lock_core",
+      "name": "边界被改动的痕迹",
+      "content": "荒废别墅的入口或边界出现了不符合常识的改动，像是在众人抵达后才被重新定义。",
       "truth_level": "hidden_fact",
-      "importance": 50,
-      "discover_routes": [],
+      "importance": 12,
+      "discover_routes": [
+        {
+          "route_id": "clue_new_lock_core_route_0",
+          "action_type": "inspect",
+          "target": "obj_gate_lock",
+          "location_id": "location_gate",
+          "topic": null,
+          "required_skill": null,
+          "difficulty": 1,
+          "result_text": "荒废别墅的边界状态会变化，不能按正常入口理解。"
+        }
+      ],
       "on_discovered": {
         "add_known_fact_to": "discoverer",
         "plot_value": {
-          "mystery": 10,
-          "progress": 10,
-          "conflict": 5
+          "mystery": 5,
+          "progress": 12,
+          "conflict": 3
         }
-      }
+      },
+      "bootstrap_fact": "荒废别墅的边界状态会变化，不能按正常入口理解。",
+      "bootstrap_inventory": null,
+      "bootstrap_event": "发现边界规则异常",
+      "related_thread": "thread_shared_survival_rule"
+    },
+    {
+      "id": "clue_frontdesk_key",
+      "name": "可协同行动的线索物",
+      "content": "一个需要进一步确认用途的小物件被留在显眼又不安全的位置，像是在引导众人进入下一处地点。",
+      "truth_level": "hidden_fact",
+      "importance": 8,
+      "discover_routes": [
+        {
+          "route_id": "clue_frontdesk_key_route_0",
+          "action_type": "search",
+          "target": "obj_frontdesk_drawer",
+          "location_id": "location_frontdesk",
+          "topic": null,
+          "required_skill": null,
+          "difficulty": 1,
+          "result_text": "队伍获得了一个可用于验证下一处地点规则的线索物。"
+        }
+      ],
+      "on_discovered": {
+        "add_known_fact_to": "discoverer",
+        "plot_value": {
+          "mystery": 5,
+          "progress": 8,
+          "conflict": 3
+        }
+      },
+      "bootstrap_fact": "队伍获得了一个可用于验证下一处地点规则的线索物。",
+      "bootstrap_inventory": "item_route_token",
+      "bootstrap_event": "发现需要协作验证的线索物",
+      "related_thread": "thread_shared_survival_rule"
+    },
+    {
+      "id": "clue_missing_mark",
+      "name": "共同处境的标记",
+      "content": "现场出现的标记同时指向多个角色的遭遇，证明触发杀人规律即死，阁楼可回到现实并非只针对某一个人。",
+      "truth_level": "hidden_fact",
+      "importance": 15,
+      "discover_routes": [
+        {
+          "route_id": "clue_missing_mark_route_0",
+          "action_type": "inspect",
+          "target": "obj_frontdesk_drawer",
+          "location_id": "location_frontdesk",
+          "topic": null,
+          "required_skill": null,
+          "difficulty": 2,
+          "result_text": "多个角色都被荒废别墅的同一套异常规则卷入。触发杀人规律即死"
+        }
+      ],
+      "on_discovered": {
+        "add_known_fact_to": "discoverer",
+        "plot_value": {
+          "mystery": 5,
+          "progress": 15,
+          "conflict": 3
+        }
+      },
+      "bootstrap_fact": "多个角色都被荒废别墅的同一套异常规则卷入。触发杀人规律即死",
+      "bootstrap_inventory": null,
+      "bootstrap_event": "发现共同处境标记",
+      "related_thread": "thread_group_conflict"
+    },
+    {
+      "id": "clue_fresh_footprints",
+      "name": "未知行动痕迹",
+      "content": "一组新近留下的痕迹避开了可见角色的行动路线，说明现场还有未被确认的行动源。",
+      "truth_level": "hidden_fact",
+      "importance": 10,
+      "discover_routes": [
+        {
+          "route_id": "clue_fresh_footprints_route_0",
+          "action_type": "inspect",
+          "target": "obj_fresh_footprints",
+          "location_id": "location_hallway",
+          "topic": null,
+          "required_skill": null,
+          "difficulty": 1,
+          "result_text": "现场存在不属于当前可见角色的行动痕迹。"
+        }
+      ],
+      "on_discovered": {
+        "add_known_fact_to": "discoverer",
+        "plot_value": {
+          "mystery": 5,
+          "progress": 10,
+          "conflict": 3
+        }
+      },
+      "bootstrap_fact": "现场存在不属于当前可见角色的行动痕迹。",
+      "bootstrap_inventory": null,
+      "bootstrap_event": "发现未知行动痕迹",
+      "related_thread": "thread_hidden_actor_trace"
     }
   ]
 }

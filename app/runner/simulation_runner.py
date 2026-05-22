@@ -5,7 +5,7 @@ import os
 import sys
 import time
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -68,7 +68,17 @@ class SimulationRunner:
         chapter_no: int = 1,
         genre_id: str = "horror",
         v2_phase: Optional[V2Phase] = None,
+        allow_incomplete_world: bool = False,
     ) -> RunResult:
+        world_dir = self.project_root / "worlds" / world.world_id
+        if not allow_incomplete_world:
+            from app.services.world_runtime_validator import RuntimeWorldValidator
+            validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
+            if not validation.passed:
+                raise ValueError(
+                    "当前 world 未完成模型补全或不可正式运行：" + "；".join(validation.issues)
+                )
+
         outputs_dir = self.project_root / "outputs"
         outputs_dir.mkdir(parents=True, exist_ok=True)
         sim_dir = self._new_simulation_dir(outputs_dir)
@@ -295,13 +305,23 @@ class SimulationRunner:
                     genre_id=genre_id,
                 )
 
+                plan_obj = result["plan"]
+                if hasattr(plan_obj, "model_dump"):
+                    chapter_plan_dict = plan_obj.model_dump()
+                elif is_dataclass(plan_obj):
+                    chapter_plan_dict = asdict(plan_obj)
+                else:
+                    chapter_plan_dict = dict(plan_obj) if isinstance(plan_obj, dict) else {}
+
+                open_threads = self._load_open_threads(world.world_id)
+
                 quality_report = quality_evaluator.evaluate(
-                    chapter_plan=result["plan"].model_dump() if hasattr(result["plan"], 'model_dump') else {},
+                    chapter_plan=chapter_plan_dict,
                     chapter_draft=result["draft"],
                     selected_events=final_events,
                     chapter_no=chapter_no,
                     novel_progress=novel_progress,
-                    open_threads=[],
+                    open_threads=open_threads,
                     consistency_report=result.get("consistency_report"),
                     state=state,
                 )
@@ -347,6 +367,17 @@ class SimulationRunner:
         except Exception as e:
             run_manager.fail(e, state)
             raise
+
+    def _load_open_threads(self, world_id: str) -> list[dict]:
+        thread_file = self.project_root / "worlds" / world_id / "open_threads.json"
+        if not thread_file.exists():
+            return []
+        try:
+            with open(thread_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
 
     @staticmethod
     def _new_simulation_dir(outputs_dir: Path) -> Path:

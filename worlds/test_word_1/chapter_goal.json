@@ -1,7 +1,7 @@
 {
-  "goal": "Setup the story",
+  "goal": "建立荒废别墅的异常规则、群体处境和第一条可验证线索",
   "pov": "char_protagonist",
-  "start_time": "day1_08:00",
+  "start_time": "day1_14:00",
   "target_progress": 100,
   "tick_limit": 30,
   "no_progress_limit": 4

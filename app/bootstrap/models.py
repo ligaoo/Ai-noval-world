@@ -17,6 +17,8 @@ class ParsedSeed(BaseModel):
     group_goal: str = ""
     survival_stakes: str = ""
     opening_mode: str = "solo_arrival"
+    core_motif: str = ""
+    motif_keywords: List[str] = Field(default_factory=list)
 
 
 # ========== 7. MinimumCastGenerator：角色配置 + active_agent ==========
@@ -34,6 +36,12 @@ class CharacterWithAgent(BaseModel):
     location_id: str = ""
     goal: str = ""
     personal_stakes: str = ""
+    public_motive: str = ""
+    private_motive: str = ""
+    withheld_information: str = ""
+    suspicious_micro_actions: List[str] = Field(default_factory=list)
+    private_hook: str = ""
+    emotional_core: str = ""
     known_facts: List[str] = Field(default_factory=list)
     suspicions: List[str] = Field(default_factory=list)
     inventory: List[str] = Field(default_factory=list)
@@ -45,6 +53,7 @@ class CharacterWithAgent(BaseModel):
     visibility: str = "visible"
     disclosure_policy: Optional[DisclosurePolicy] = None
     llm_temperature: Optional[float] = None
+    skills: Dict[str, int] = Field(default_factory=dict)
 
 
 # ========== 8. BootstrapMapGenerator：地图配置 ==========
@@ -97,6 +106,7 @@ class EvidenceItem(BaseModel):
 class DiscoverRoute(BaseModel):
     location_id: str
     object_id: Optional[str] = None
+    target: Optional[str] = None
     action: str
     difficulty: int = 1
     required_skill: Optional[str] = None
@@ -129,6 +139,10 @@ class OpenThread(BaseModel):
     status: str = "open"
     opened_at_chapter: int = 1
     related_evidence_ids: List[str] = Field(default_factory=list)
+    thread_type: str = "mystery"
+    motif: str = ""
+    thematic_keyword: str = ""
+    payoff_hint: str = ""
 
 
 # ========== 13. OpeningChapterGoalGenerator：第一章目标 ==========
@@ -151,6 +165,9 @@ class OpeningChapterPlan(BaseModel):
     selected_clues: List[str] = Field(default_factory=list)
     obstacle: Optional[Obstacle] = None
     ending_hook: Optional[EndingHook] = None
+    protagonist_private_hook: str = ""
+    required_conflict_beat: str = ""
+    concrete_ending_hook: str = ""
     forbidden_reveals: List[str] = Field(default_factory=list)
     initial_location: str = ""
 
@@ -164,6 +181,11 @@ class WriterStoryAnchor(BaseModel):
     current_chapter_goal: str = ""
     main_question: str = ""
     required_emotional_beat: str = ""
+    protagonist_private_hook: str = ""
+    required_interpersonal_conflict: str = ""
+    core_motif: str = ""
+    concrete_ending_hook: str = ""
+    forbidden_summary_sentences: List[str] = Field(default_factory=list)
     forbidden_generic_phrases: List[str] = Field(default_factory=lambda: [
         "神秘之地", "发现真相", "重要的东西", "说不清的直觉",
         "有些问题只有走进去才能找到答案", "我已经做好继续走下去的准备",
@@ -216,6 +238,7 @@ class BootstrapResult(BaseModel):
     parsed_seed: Optional[ParsedSeed] = None
     validation: Optional[ValidationResult] = None
     created_at: str = ""
+    fusion_report: Dict[str, Any] = Field(default_factory=dict)
 
     def summary_dict(self) -> Dict[str, Any]:
         return {

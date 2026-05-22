@@ -1,0 +1,41 @@
+[
+  {
+    "thread_id": "thread_shared_survival_rule",
+    "question": "被卷入荒废别墅的角色必须遵守什么共同规则，才可能找到阁楼钥匙回到现实？",
+    "priority": 10,
+    "status": "open",
+    "opened_at_chapter": 1,
+    "related_evidence_ids": [
+      "ev_new_lock_core",
+      "ev_missing_mark"
+    ]
+  },
+  {
+    "thread_id": "thread_hidden_actor_trace",
+    "question": "除了可见角色之外，还有谁或什么在改变现场痕迹？",
+    "priority": 8,
+    "status": "open",
+    "opened_at_chapter": 1,
+    "related_evidence_ids": [
+      "ev_fresh_footprints"
+    ]
+  },
+  {
+    "thread_id": "thread_group_conflict",
+    "question": "队伍内部的隐瞒和分歧会怎样影响所有人的生存机会？",
+    "priority": 7,
+    "status": "open",
+    "opened_at_chapter": 1,
+    "related_evidence_ids": [
+      "ev_missing_mark"
+    ]
+  },
+  {
+    "thread_id": "thread_supernatural",
+    "question": "触发杀人规律即死，阁楼钥匙返回现实，规律随机变化究竟如何回应众人的选择？",
+    "priority": 10,
+    "status": "open",
+    "opened_at_chapter": 1,
+    "related_evidence_ids": []
+  }
+]

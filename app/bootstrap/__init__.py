@@ -23,6 +23,7 @@ from .open_thread_seed_generator import OpenThreadSeedGenerator
 from .opening_chapter_goal_generator import OpeningChapterGoalGenerator
 from .seed_interpreter import SeedInterpreter
 from .story_bootstrapper import StoryBootstrapper
+from .world_completion_service import WorldCompletionService
 from .truth_chain_generator import TruthChainGenerator
 from .world_bible_generator import WorldBibleGenerator
 from .writer_anchor_generator import WriterStoryAnchorGenerator
@@ -41,6 +42,7 @@ __all__ = [
     "OpeningChapterGoalGenerator",
     "WriterStoryAnchorGenerator",
     "BootstrapValidator",
+    "WorldCompletionService",
 
     # models
     "BootstrapSeed",

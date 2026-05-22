@@ -1,0 +1,82 @@
+{
+  "bootstrap_id": "boot_1779472110598",
+  "world_id": "test_word_1",
+  "status": "confirmed",
+  "title": "噩梦惊袭1",
+  "created_at": "2026-05-23 01:50:42",
+  "summary": {
+    "title": "噩梦惊袭1",
+    "characters": 6,
+    "locations": 9,
+    "clues": 4,
+    "open_threads": 4
+  },
+  "parsed_seed": {
+    "genre": "horror",
+    "sub_genre": "suspense_supernatural",
+    "core_location": "荒废别墅",
+    "supernatural_element": "触发杀人规律即死，阁楼钥匙返回现实，规律随机变化",
+    "protagonist_goal": "Discover the truth",
+    "missing_person": "缺席者",
+    "story_type": "survival_escape",
+    "bootstrap_template": "villa_cult_investigation",
+    "cast_mode": "ensemble_survival",
+    "ensemble_size": 4,
+    "group_goal": "找到阁楼钥匙回到现实",
+    "survival_stakes": "触发杀人规律即死",
+    "opening_mode": "group_wake_up"
+  },
+  "validation": {
+    "passed": true,
+    "issues": [],
+    "warnings": []
+  },
+  "fusion_report": {
+    "preserved": {
+      "world_bible_fields": [
+        "title",
+        "genre",
+        "tone",
+        "era",
+        "rules",
+        "themes"
+      ],
+      "characters": [
+        "char_protagonist",
+        "char_1779432071331",
+        "char_absent_anchor",
+        "npc_visible_ally_1",
+        "npc_visible_ally_2",
+        "npc_hidden_actor"
+      ],
+      "locations": [
+        "bieshuyilou-1",
+        "bieshuyikou2",
+        "location_gate",
+        "location_frontdesk",
+        "location_hallway",
+        "location_archive",
+        "location_basement",
+        "location_witness_point",
+        "location_inner"
+      ],
+      "clues": [
+        "clue_new_lock_core",
+        "clue_frontdesk_key",
+        "clue_missing_mark",
+        "clue_fresh_footprints"
+      ]
+    },
+    "generated": {
+      "characters": [],
+      "locations": [],
+      "clues": []
+    },
+    "repaired": [
+      "dropped_placeholder_location:location_001",
+      "dropped_placeholder_location:location_002",
+      "dropped_clue_without_route:111111",
+      "fixed_character_location:char_1779432071331"
+    ]
+  }
+}
