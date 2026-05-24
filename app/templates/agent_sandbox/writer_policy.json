@@ -1,0 +1,6 @@
+{
+  "use_visible_events_only": true,
+  "use_allowed_facts_only": true,
+  "do_not_create_new_structured_events": true,
+  "do_not_confirm_suspicions_as_truth": true
+}

@@ -7,8 +7,12 @@ import sys
 
 # Windows 编码修复：强制使用 UTF-8
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except AttributeError:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     os.environ["PYTHONIOENCODING"] = "utf-8"
 
 import typer
@@ -34,7 +38,7 @@ def main(
     v2_phase: Optional[str] = typer.Option(
         "v2.3",
         "--v2-phase",
-        help="V2 阶段模式：v2.1 / v2.2 / v2.3（最终版本推荐 v2.3）",
+        help="V2 阶段模式：v2.1 / v2.2 / v2.3 / v2.4（v2.4 启用 Agent Sandbox）",
     ),
 ):
     project_root = Path(__file__).parent.parent
@@ -54,8 +58,8 @@ def main(
         console.print("[dim]   请在 .env 文件中配置 OPENAI_API_KEY[/dim]")
         actual_mode = "heuristic"
 
-    if v2_phase is not None and v2_phase not in ("v2.1", "v2.2", "v2.3"):
-        raise typer.BadParameter("--v2-phase 仅支持 v2.1 / v2.2 / v2.3")
+    if v2_phase is not None and v2_phase not in ("v2.1", "v2.2", "v2.3", "v2.4"):
+        raise typer.BadParameter("--v2-phase 仅支持 v2.1 / v2.2 / v2.3 / v2.4")
 
     if v2_phase is None:
         v2_phase = "v2.3"

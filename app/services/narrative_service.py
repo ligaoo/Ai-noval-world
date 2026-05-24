@@ -96,9 +96,9 @@ class NarrativeService:
 
             # 4. 一致性检查 + revise once
             if self.enable_consistency_check:
-                report = self.consistency_svc.check_consistency(draft, plan, plot_events)
+                report = self.consistency_svc.check_consistency(draft, plan, filtered_plot_events)
                 if not report["passed"] and report.get("violations"):
-                    draft = self.consistency_svc.revise_once(draft, plan, plot_events)
+                    draft = self.consistency_svc.revise_once(draft, plan, filtered_plot_events)
                     # 重新保存修订后的版本
                     with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
                         f.write(draft)

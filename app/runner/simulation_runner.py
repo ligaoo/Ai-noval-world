@@ -36,7 +36,7 @@ from app.services.world_state_service import WorldStateService
 
 
 AgentMode = Literal["scripted", "heuristic", "llm"]
-V2Phase = Literal["v2.1", "v2.2", "v2.3"]
+V2Phase = Literal["v2.1", "v2.2", "v2.3", "v2.4"]
 
 
 @dataclass
@@ -115,10 +115,27 @@ class SimulationRunner:
             )
             env = EnvironmentEngine(world=world, llm_client=llm_client)
 
+            sandbox_loop = None
+
             tension_monitor = TensionMonitor(window_size=5)
             director_service = DirectorService(self.project_root / "worlds" / world.world_id)
             intervention_service = InterventionService(sim_dir)
             plot_arc_service = PlotArcService(self.project_root / "worlds", world.world_id)
+            if feature_flags.get("enable_agent_sandbox"):
+                from app.services.agent_sandbox_loop import AgentSandboxLoop
+                sandbox_loop = AgentSandboxLoop(
+                    project_root=self.project_root,
+                    sim_dir=sim_dir,
+                    world=world,
+                    mode=mode,
+                    environment=env,
+                    event_service=self.event_svc,
+                    memory_service=memory_service,
+                    llm_client=llm_client,
+                    trace_service=trace_service,
+                    plot_arc_service=plot_arc_service,
+                    temperature=temperature,
+                )
             chapter_continuity_service = None
 
             try:
@@ -148,6 +165,40 @@ class SimulationRunner:
             for t in range(1, tick_limit + 1):
                 state.tick = t
                 pov_id = world.chapter_goal.pov
+
+                if sandbox_loop:
+                    recent_events = self.event_svc.read_all(sim_dir)
+                    sandbox_result = sandbox_loop.run_tick(state, recent_events[-20:])
+                    for event_id in sandbox_result.event_ids:
+                        matching = [e for e in self.event_svc.read_all(sim_dir) if e.event_id == event_id]
+                        for ev in matching:
+                            tension_monitor.record_event(ev)
+                    current_events = self.event_svc.read_all(sim_dir)
+                    hint = monitor.update_and_maybe_hint(state, current_events)
+                    if hint:
+                        hint_event = EventLog(
+                            event_id=f"evt_soft_hint_{t:04d}",
+                            event_level="plot",
+                            time=state.world_time,
+                            event_type="soft_hint",
+                            location_id=state.characters[pov_id].location_id,
+                            actors=[pov_id],
+                            action=None,
+                            result=hint.text,
+                            visible_to=[pov_id],
+                            plot_value=PlotValue(mystery=1, novelty=1),
+                        )
+                        self.event_svc.append(sim_dir, hint_event)
+                        if memory_service:
+                            memory_service.write_from_event(hint_event, state)
+                        tension_monitor.record_event(hint_event)
+                    state.world_time = add_minutes(state.world_time, 5)
+                    self.state_svc.save(sim_dir, state)
+                    run_manager.save_snapshot(state)
+                    run_manager.mark_running(state)
+                    if state.chapter_goal_status.completed:
+                        break
+                    continue
 
                 # P1（plan §14）：用 MultiAgentScheduler 决定行动顺序
                 #   1) 主角 2) 同地点 NPC  3) 隐藏行动者  4) 其他
@@ -395,6 +446,9 @@ class SimulationRunner:
                 "enable_memory": True,
                 "force_rule_narrative": False,
                 "enable_consistency_revise": True,
+                "enable_agent_sandbox": False,
+                "enable_fact_exposure_matrix": False,
+                "enable_multi_round_interaction": False,
             }
         if v2_phase == "v2.1":
             return {
@@ -402,6 +456,9 @@ class SimulationRunner:
                 "enable_memory": False,
                 "force_rule_narrative": True,
                 "enable_consistency_revise": False,
+                "enable_agent_sandbox": False,
+                "enable_fact_exposure_matrix": False,
+                "enable_multi_round_interaction": False,
             }
         if v2_phase == "v2.2":
             return {
@@ -409,12 +466,28 @@ class SimulationRunner:
                 "enable_memory": False,
                 "force_rule_narrative": True,
                 "enable_consistency_revise": False,
+                "enable_agent_sandbox": False,
+                "enable_fact_exposure_matrix": False,
+                "enable_multi_round_interaction": False,
+            }
+        if v2_phase == "v2.4":
+            return {
+                "allow_move": True,
+                "enable_memory": True,
+                "force_rule_narrative": False,
+                "enable_consistency_revise": True,
+                "enable_agent_sandbox": True,
+                "enable_fact_exposure_matrix": True,
+                "enable_multi_round_interaction": True,
             }
         return {
             "allow_move": True,
             "enable_memory": True,
             "force_rule_narrative": False,
             "enable_consistency_revise": True,
+            "enable_agent_sandbox": False,
+            "enable_fact_exposure_matrix": False,
+            "enable_multi_round_interaction": False,
         }
 
     @staticmethod

@@ -169,9 +169,10 @@ class RuntimeWorldValidator:
         values.update(world.bible.themes)
 
         for character in world.characters.characters:
-            values.add(character.name)
-            values.add(character.goals.get("short_term", "") if isinstance(character.goals, dict) else "")
-            values.add(character.goals.get("long_term", "") if isinstance(character.goals, dict) else "")
+            self._add_placeholder_values(values, character.name)
+            if isinstance(character.goals, dict):
+                self._add_placeholder_values(values, character.goals.get("short_term", ""))
+                self._add_placeholder_values(values, character.goals.get("long_term", ""))
 
         for loc in world.map.locations:
             values.add(loc.name)
@@ -190,3 +191,15 @@ class RuntimeWorldValidator:
         )
         if placeholders:
             issues.append(f"检测到测试/占位内容，不能作为正式世界启动：{', '.join(placeholders)}。")
+
+    def _add_placeholder_values(self, values: Set[str], value) -> None:
+        if isinstance(value, str):
+            values.add(value)
+            return
+        if isinstance(value, list):
+            for item in value:
+                self._add_placeholder_values(values, item)
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                self._add_placeholder_values(values, item)

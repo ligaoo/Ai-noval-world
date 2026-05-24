@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 from typing import Dict
 
-from app.models.state import ChapterGoalStatus, CharacterRuntimeState, WorldRuntimeState, WorldState
+from app.models.state import (
+    ChapterGoalStatus,
+    CharacterRuntimeState,
+    FactExposureEntry,
+    RelationshipRuntimeState,
+    WorldRuntimeState,
+    WorldState,
+)
 from app.models.world import WorldConfig
 
 
@@ -29,11 +36,17 @@ class WorldStateService:
                     "location_id": loc.id,
                 }
 
+        character_ids = world.characters.ids()
         location_ids = {loc.id for loc in world.map.locations}
         start_location = world.map.locations[0].id
         characters: Dict[str, CharacterRuntimeState] = {}
         for c in world.characters.characters:
             initial_location = c.initial_location if c.initial_location in location_ids else start_location
+            relationships = {
+                other_id: RelationshipRuntimeState()
+                for other_id in character_ids
+                if other_id != c.id
+            }
             characters[c.id] = CharacterRuntimeState(
                 location_id=initial_location,
                 mental_state="",
@@ -43,7 +56,35 @@ class WorldStateService:
                 last_action=None,
                 repeat_action_count=0,
                 attitude_to={},
+                relationships=relationships,
+                hidden_status=c.visibility,
             )
+
+        fact_exposure: Dict[str, FactExposureEntry] = {}
+        for clue in world.clues.clues:
+            known_by = [
+                cid
+                for cid, runtime in characters.items()
+                if clue.content in runtime.known_facts or clue.id in runtime.known_facts
+            ]
+            fact_exposure[clue.id] = FactExposureEntry(
+                fact_id=clue.id,
+                truth=clue.content,
+                known_by=known_by,
+                source="clue",
+                reveal_stage=getattr(clue, "truth_level", ""),
+            )
+        for c in world.characters.characters:
+            for idx, secret in enumerate(c.secrets):
+                fact_id = f"{c.id}_secret_{idx + 1}"
+                if fact_id not in fact_exposure:
+                    fact_exposure[fact_id] = FactExposureEntry(
+                        fact_id=fact_id,
+                        truth=secret,
+                        known_by=[c.id],
+                        source="character_secret",
+                        reveal_stage="hidden_fact",
+                    )
 
         return WorldState(
             simulation_id=simulation_id,
@@ -53,7 +94,12 @@ class WorldStateService:
             chapter_goal_status=ChapterGoalStatus(goal=world.chapter_goal.goal, completed=False, progress=0),
             no_progress_ticks=0,
             characters=characters,
-            world=WorldRuntimeState(discovered_facts=discovered, objects=objects, soft_hints=[]),
+            world=WorldRuntimeState(
+                discovered_facts=discovered,
+                objects=objects,
+                soft_hints=[],
+                fact_exposure=fact_exposure,
+            ),
         )
 
     def load(self, sim_dir: Path) -> WorldState:

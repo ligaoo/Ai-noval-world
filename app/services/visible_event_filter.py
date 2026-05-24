@@ -62,9 +62,12 @@ class VisibleEventFilter:
             result.append(e)
         return result
 
+    def filter_for_agent(self, events: List[EventLog], agent_id: str) -> List[EventLog]:
+        return [e for e in events if e and (agent_id in (e.visible_to or []))]
+
     def filter_for_narrative(self, events: List[EventLog], pov_id: str) -> List[EventLog]:
         """只给 LLM 写正文用的过滤：只保留 POV 可感知的内容"""
-        return [e for e in events if e and (pov_id in (e.visible_to or []))]
+        return self.filter_for_agent(events, pov_id)
 
     @staticmethod
     def has_sensitive_content(event: EventLog) -> bool:

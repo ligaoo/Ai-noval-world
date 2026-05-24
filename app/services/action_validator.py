@@ -58,7 +58,7 @@ class ActionValidator:
                 )
 
         # 4. 知识边界校验：不得引用未发现线索的具体内容
-        discovered = set(state.world.discovered_facts.keys())
+        discovered = {fact_id for fact_id, is_discovered in state.world.discovered_facts.items() if is_discovered}
         for clue in self.world.clues.clues:
             if clue.id not in discovered:
                 clue_text = (clue.content or "").lower()
@@ -105,6 +105,10 @@ class ActionValidator:
         """获取指定地点的所有合法目标（objects + 在场角色）。"""
         loc = self.world.map.get_location(location_id)
         targets = {o.id for o in loc.objects}
+
+        for obj_id, obj_data in state.world.objects.items():
+            if obj_data.get("location_id") == location_id:
+                targets.add(obj_id)
 
         # 在场角色
         for other_id, other_state in state.characters.items():

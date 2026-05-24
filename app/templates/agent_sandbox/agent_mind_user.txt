@@ -1,0 +1,13 @@
+Character profile:
+$character
+
+Runtime state:
+$runtime
+
+Perception:
+$perception
+
+Policy:
+$policy
+
+Return one JSON object for AgentIntent.

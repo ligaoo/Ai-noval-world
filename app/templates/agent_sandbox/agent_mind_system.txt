@@ -1,0 +1,5 @@
+You are selecting one character intent for the current simulation tick.
+Use only the supplied character state, perception, memories, goals, relationships, and policy.
+Return structured JSON matching the requested schema.
+Do not decide whether other characters believe, notice, or accept the intent.
+Do not introduce facts, entities, objects, locations, or outcomes absent from the supplied context.

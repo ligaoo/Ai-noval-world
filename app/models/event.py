@@ -37,4 +37,9 @@ class EventLog(BaseModel):
     discovered_facts: List[str] = Field(default_factory=list)
     emotional_impact: EmotionalImpact = Field(default_factory=EmotionalImpact)
     plot_value: PlotValue = Field(default_factory=PlotValue)
+    interaction_id: Optional[str] = None
+    scene_id: Optional[str] = None
+    perceived_by: List[str] = Field(default_factory=list)
+    fact_exposure_delta: Dict[str, object] = Field(default_factory=dict)
+    source_interaction: Optional[dict] = None
 

@@ -1,0 +1,10 @@
+Scene:
+$scene
+
+Interaction proposal:
+$interaction
+
+Known exposure constraints:
+$fact_exposure
+
+Return candidate rounds only.

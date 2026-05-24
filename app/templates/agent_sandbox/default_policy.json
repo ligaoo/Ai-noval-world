@@ -1,0 +1,49 @@
+{
+  "max_interaction_rounds": 5,
+  "default_visibility": {
+    "same_location_can_see": true,
+    "same_location_can_hear": true,
+    "adjacent_can_hear": true,
+    "adjacent_can_see": false
+  },
+  "action_policy": {
+    "allowed_intent_actions": [
+      "observe",
+      "inspect",
+      "search",
+      "move",
+      "ask",
+      "answer",
+      "refuse",
+      "hide",
+      "lie",
+      "withhold",
+      "follow",
+      "block",
+      "suggest",
+      "challenge",
+      "share_info",
+      "trade_info",
+      "take_item",
+      "mark_location",
+      "listen",
+      "wait",
+      "retreat",
+      "call_out",
+      "test_rule",
+      "accuse",
+      "force_check",
+      "protect",
+      "attack",
+      "escape"
+    ]
+  },
+  "writer_policy": {
+    "forbid_unseen_facts": true,
+    "forbid_new_entities": true
+  },
+  "director_policy": {
+    "max_interventions_per_chapter": 5,
+    "cooldown_ticks": 3
+  }
+}
