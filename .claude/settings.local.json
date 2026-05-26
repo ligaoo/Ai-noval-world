@@ -10,7 +10,22 @@
       "Bash(PYTHONPATH=/e/ai-noval-world timeout:*)",
       "Bash(python:*)",
       "Bash(py:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(where:*)",
+      "Bash(if not exist \"web\\\\node_modules\" npm install --prefix web)",
+      "Bash(test:*)",
+      "Bash(npm install:*)",
+      "Bash(npm --prefix \"web\" run dev)",
+      "Bash(powershell:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(cmd:*)",
+      "Bash(wmic:*)",
+      "Bash(MSYS2_ARG_CONV_EXCL='*' cmd.exe:*)",
+      "Bash(MSYS2_ARG_CONV_EXCL='*' cmd.exe /c \"netstat -ano | findstr :8421\")",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

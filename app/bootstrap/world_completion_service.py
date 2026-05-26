@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -392,7 +393,8 @@ class WorldCompletionService:
 
     def _apply_manual_character(self, character: CharacterWithAgent, manual: Dict[str, Any]) -> None:
         if self._meaningful(manual.get("name")):
-            character.name = manual["name"]
+            manual_name = str(manual["name"])
+            character.name = self._safe_character_name(manual_name, character)
         if self._meaningful(manual.get("role")):
             character.role = self._normalize_role(manual["role"])
         goals = manual.get("goals") or {}
@@ -420,6 +422,34 @@ class WorldCompletionService:
             character.skills = manual["skills"]
         if isinstance(manual.get("llm_temperature"), (int, float)):
             character.llm_temperature = float(manual["llm_temperature"])
+
+    def _safe_character_name(self, name: str, character: CharacterWithAgent) -> str:
+        if not self._is_placeholder_name(name):
+            return name
+        mapping = {
+            "protagonist": "林砚",
+            "missing_person": "顾行舟",
+            "hidden_actor": "程疏影",
+            "gatekeeper": "沈伯衡",
+            "witness": "罗敏",
+            "survivor": "许照",
+        }
+        return mapping.get(character.role, "梁既白")
+
+    @staticmethod
+    def _is_placeholder_name(name: str) -> bool:
+        text = (name or "").strip()
+        if not text:
+            return True
+        exact = {
+            "主角", "阻碍者", "目击者", "隐藏行动者", "未露面的行动者", "神秘人", "NPC", "NPC1", "NPC2",
+            "同行者甲", "同行者乙", "同行者丙", "知情者甲", "知情者乙", "目击者甲", "目击者乙",
+            "被卷入的同行者", "持异议的同行者",
+        }
+        if text in exact:
+            return True
+        patterns = [r"^NPC\d*$", r"^同行者[甲乙丙丁]$", r"^知情者[甲乙丙丁]$", r"^目击者[甲乙丙丁]$", r".*同行者$", r".*行动者$", r".*目击者$", r".*知情人$"]
+        return any(re.fullmatch(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
 
     def _object_to_bootstrap(self, obj: Any, location_id: str) -> BootstrapLocationObject:
         if isinstance(obj, str):

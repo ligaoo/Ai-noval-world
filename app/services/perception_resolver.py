@@ -32,7 +32,7 @@ class PerceptionResolver:
             score = self._observer_score(observer) + pressure_level
             difficulty = self._target_difficulty(target_intent.agent_id) + len(target_intent.will_hide)
             if self._roll(state, interaction_id, observer, target_intent.agent_id) + score >= difficulty:
-                suspected = target_intent.will_hide[0] if target_intent.will_hide else "withheld_information"
+                suspected = "withheld_information" if target_intent.will_hide else "inconsistent_or_guarded_response"
                 notices.append(
                     PerceptionNotice(
                         observer=observer,

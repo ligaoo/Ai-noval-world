@@ -23,7 +23,7 @@
       </div>
     </div>
     <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #d1fae5;">
-      当前默认运行链路：`开 move` · `开记忆` · `开 LLM 叙事改写` · `开一致性检查+修订`（`llm + v2.3`）
+      当前默认运行链路：`开 move` · `开记忆` · `开 LLM 叙事改写` · `开一致性检查+修订`（`llm + v2.4 Agent Sandbox`）
     </div>
 
     <!-- 世界选择器 -->
@@ -820,6 +820,8 @@ const startSimulation = async () => {
       },
       body: JSON.stringify({
         world_id: currentWorldId,
+        mode: 'llm',
+        v2_phase: 'v2.4',
         seed: 12345,
         genre_id: 'horror',
         target_chapters: 10,
@@ -854,7 +856,7 @@ const startSimulation = async () => {
 
         if (status.status === 'completed') {
           simulationResult.value = status
-          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: llm / v2.3`)
+          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: ${status.runtime_mode || 'llm'} / ${status.runtime_phase || 'v2.4'}`)
           break
         } else if (status.status === 'failed') {
           throw new Error(status.error || '模拟运行失败')

@@ -23,7 +23,7 @@ from app.models.world import WorldConfig
 from app.runner.simulation_runner import SimulationRunner
 
 
-app = typer.Typer(no_args_is_help=True, help="小说沙盘引擎 V2.3：LLM Agent + 记忆系统 + 叙事生成")
+app = typer.Typer(no_args_is_help=True, help="小说沙盘引擎：默认最新 v2.4 Agent Sandbox")
 console = Console()
 
 
@@ -36,9 +36,9 @@ def main(
     temperature: Optional[float] = typer.Option(None, "--temperature", help="LLM 温度（仅 llm 模式，默认从 .env 读取）"),
     max_retries: int = typer.Option(2, "--max-retries", help="LLM 最大重试次数（仅 llm 模式）"),
     v2_phase: Optional[str] = typer.Option(
-        "v2.3",
+        "v2.4",
         "--v2-phase",
-        help="V2 阶段模式：v2.1 / v2.2 / v2.3 / v2.4（v2.4 启用 Agent Sandbox）",
+        help="V2 阶段模式：仅支持 v2.4（Agent Sandbox + Intent Driven Interruption）",
     ),
 ):
     project_root = Path(__file__).parent.parent
@@ -58,11 +58,10 @@ def main(
         console.print("[dim]   请在 .env 文件中配置 OPENAI_API_KEY[/dim]")
         actual_mode = "heuristic"
 
-    if v2_phase is not None and v2_phase not in ("v2.1", "v2.2", "v2.3", "v2.4"):
-        raise typer.BadParameter("--v2-phase 仅支持 v2.1 / v2.2 / v2.3 / v2.4")
-
     if v2_phase is None:
-        v2_phase = "v2.3"
+        v2_phase = "v2.4"
+    elif v2_phase != "v2.4":
+        raise typer.BadParameter("旧阶段 v2.1/v2.2/v2.3 已删除，--v2-phase 仅支持 v2.4")
 
     worlds_dir = project_root / "worlds"
 
@@ -72,8 +71,6 @@ def main(
     console.print(f"[bold]运行配置：[/bold] mode={actual_mode}, ticks={actual_ticks}, temperature={actual_temperature}")
     if v2_phase:
         console.print(f"[cyan]V2 阶段：[/cyan]{v2_phase}")
-        if v2_phase in ("v2.1", "v2.2") and actual_mode != "llm":
-            console.print("[yellow]提示：V2.1/V2.2 推荐使用 llm 模式验证 JSON 决策稳定性。[/yellow]")
     if cfg.is_llm_available():
         console.print(f"[dim]LLM 已就绪：{cfg.get_llm_config().model}[/dim]")
 

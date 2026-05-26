@@ -11,22 +11,35 @@ class WorldStateUpdater:
 
     def apply_interaction_result(self, state: WorldState, result: InteractionResult) -> None:
         self.fact_matrix.apply_interaction_result(state, result)
-        for fact, suspected_by in result.suspected_facts.items():
-            for character_id, confidence in suspected_by.items():
-                runtime = state.characters.get(character_id)
-                if not runtime:
+        suspicion_items = []
+        if result.exposure_update:
+            for item in result.exposure_update.suspected_facts:
+                if item.get("status", "suspected") != "suspected":
                     continue
-                if fact not in runtime.suspicions:
-                    runtime.suspicions.append(fact)
-                if not any(b.content == fact for b in runtime.beliefs):
-                    runtime.beliefs.append(
-                        BeliefState(
-                            content=fact,
-                            confidence=confidence,
-                            source=result.interaction_id,
-                            updated_tick=state.tick,
-                        )
+                label = str(item.get("label") or item.get("fact_id") or "")
+                related_fact_id = str(item.get("fact_id") or "")
+                for character_id in item.get("suspected_by", []):
+                    suspicion_items.append((label, str(character_id), float(item.get("confidence", 0.5)), related_fact_id))
+        else:
+            for fact, suspected_by in result.suspected_facts.items():
+                for character_id, confidence in suspected_by.items():
+                    suspicion_items.append((fact, character_id, confidence, None))
+        for fact, character_id, confidence, related_fact_id in suspicion_items:
+            runtime = state.characters.get(character_id)
+            if not runtime:
+                continue
+            if fact not in runtime.suspicions:
+                runtime.suspicions.append(fact)
+            if not any(b.content == fact for b in runtime.beliefs):
+                runtime.beliefs.append(
+                    BeliefState(
+                        content=fact,
+                        confidence=confidence,
+                        source=result.interaction_id,
+                        related_fact_id=related_fact_id,
+                        updated_tick=state.tick,
                     )
+                )
         for change in result.relationship_changes:
             from_id = change.get("from")
             to_id = change.get("to")

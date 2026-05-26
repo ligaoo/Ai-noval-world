@@ -18,6 +18,11 @@ class ActionArbitrator:
         "share_info",
         "trade_info",
         "accuse",
+        "call_out",
+        "block",
+        "listen",
+        "protect",
+        "force_check",
     }
     SIMPLE_ACTIONS = {"observe", "inspect", "search", "move", "wait"}
 
@@ -93,10 +98,25 @@ class ActionArbitrator:
             (intent.agent_id for intent in intents if intent.action_type in {"ask", "challenge", "accuse"}),
             None,
         )
+        buttons = sorted({button for intent in intents for button in intent.conflict_buttons})
+        private_interests = {
+            intent.agent_id: intent.private_interest
+            for intent in intents
+            if intent.private_interest
+        }
+        pressure_required = max((intent.pressure_level for intent in intents), default=0)
         if holder or seeker:
             return {
                 "type": "information_control",
                 "holder": holder,
                 "seeker": seeker,
+                "buttons": buttons,
+                "private_interests": private_interests,
+                "pressure_required": max(2, pressure_required),
             }
-        return {"type": "social_exchange"}
+        return {
+            "type": "social_exchange",
+            "buttons": buttons,
+            "private_interests": private_interests,
+            "pressure_required": max(1, pressure_required),
+        }

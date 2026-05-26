@@ -44,7 +44,7 @@ running_simulations: Dict[str, Dict] = {}
 class SimulationRequest(BaseModel):
     world_id: str = "dark_city_001"
     mode: str = "llm"
-    v2_phase: str = "v2.3"
+    v2_phase: str = "v2.4"
     ticks: Optional[int] = None
     seed: int = 12345
     genre_id: str = "horror"
@@ -121,6 +121,10 @@ async def get_world(world_id: str):
         from app.models.world import WorldConfig
         from app.services.world_runtime_validator import RuntimeWorldValidator
         world = WorldConfig.from_directory(world_dir)
+        world_data["display"] = {
+            "characters": {char.id: char.name for char in world.characters.characters},
+            "locations": {loc.id: loc.name for loc in world.map.locations},
+        }
         validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
         world_data["formal_run_validation"] = {
             "passed": validation.passed,
@@ -230,9 +234,9 @@ def _run_simulation_sync(sim_id: str, request: SimulationRequest):
                 }
                 return
 
-        # 最终版本统一使用：move+memory+LLM叙事+一致性修订（v2.3）
+        # 最新 v2.4 Agent Sandbox 统一使用：move+memory+LLM叙事+一致性修订
         forced_mode = "llm"
-        forced_phase = "v2.3"
+        forced_phase = "v2.4"
 
         runner = SimulationRunner(PROJECT_ROOT)
         result = runner.run(
@@ -290,6 +294,9 @@ async def run_simulation(request: SimulationRequest):
                     },
                 )
 
+        request.mode = "llm"
+        request.v2_phase = "v2.4"
+
         # 生成模拟 ID
         import time
         sim_id = f"sim_{int(time.time() * 1000)}"
@@ -299,6 +306,8 @@ async def run_simulation(request: SimulationRequest):
             "status": "running",
             "request": request.model_dump(),
             "error": None,
+            "runtime_mode": "llm",
+            "runtime_phase": "v2.4",
         }
 
         # 在后台线程中运行模拟
@@ -980,7 +989,7 @@ async def start_story_bootstrap(bootstrap_id: str):
     sim_request = SimulationRequest(
         world_id=result.world_id,
         mode="llm",
-        v2_phase="v2.3",
+        v2_phase="v2.4",
         seed=12345,
         genre_id=(result.world_bible.get("genre") or "horror"),
         target_chapters=10,

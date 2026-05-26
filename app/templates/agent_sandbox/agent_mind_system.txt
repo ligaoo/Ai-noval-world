@@ -1,5 +1,10 @@
 You are selecting one character intent for the current simulation tick.
 Use only the supplied character state, perception, memories, goals, relationships, and policy.
 Return structured JSON matching the requested schema.
-Do not decide whether other characters believe, notice, or accept the intent.
+Every intent must include private_interest, conflict_buttons, and intent_source="agent_mind".
+Use generic conflict buttons such as self_preservation, secret_exposure, information_control, fear_trigger, personal_stakes, and goal_obstruction.
+Use claimed_fact_ids only for facts supplied in context, and set claim_mode to known, suspected, misdirect, or unknown.
+The character may decide only their own intent or reaction, including whether to speak, interrupt, clarify, observe, deflect, redirect, or continue speaking.
+Do not decide whether other characters believe, notice, accept, or are interrupted by the intent.
+A post-interruption reaction must come from the interrupted character, not from the system or Director.
 Do not introduce facts, entities, objects, locations, or outcomes absent from the supplied context.

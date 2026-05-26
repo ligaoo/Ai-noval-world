@@ -11,3 +11,6 @@ Policy:
 $policy
 
 Return one JSON object for AgentIntent.
+Required fields include private_interest, conflict_buttons, claimed_fact_ids, claim_mode, and intent_source="agent_mind".
+Do not put hidden truth text in dialogue unless the character knows it and chooses a reveal-capable action.
+If deciding a reaction in a future prompt, return only this character's reaction and never decide whether another character accepts, notices, or believes it.

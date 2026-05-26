@@ -5,7 +5,15 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from app.llm_client import OpenAICompatibleClient
-from app.models.interaction import AgentIntent, AgentPerception, IntentActionType
+from app.models.interaction import (
+    AgentIntent,
+    AgentPerception,
+    IntentActionType,
+    InterruptionResult,
+    ReactionIntent,
+    SpeechSegment,
+    TurnState,
+)
 from app.models.state import WorldState
 from app.models.world import CharacterProfile, WorldConfig
 from app.services.prompt_template_service import PromptTemplateService
@@ -66,22 +74,30 @@ class AgentMindService:
             rel = runtime.relationships[target_agent]
             low_trust_target = rel.trust < 0 or rel.suspicion > 1
 
+        readiness = self._leadership_readiness(state, profile)
         if target_agent and has_secret and disclosure_policy.get("can_withhold", True):
             action_type = "withhold"
             intention = "avoid exposing private information while staying responsive"
             will_hide = list(profile.secrets[:3])
-            public_facts = [fact for fact in perception.known_facts if fact not in profile.secrets]
-            will_say = public_facts[:2]
+            will_say = self._select_sayable_facts(state, profile, perception, target_agent, "withhold", 0, 1)
+            if not will_say:
+                will_say = ["I need to understand what you saw first."]
             topic = self._first_topic(target_agent)
         elif target_agent and (runtime.suspicions or low_trust_target):
-            action_type = "challenge"
-            intention = "test whether the other character is reliable"
-            will_say = runtime.suspicions[:2]
+            action_type = "challenge" if readiness >= 2 else "ask"
+            intention = "test reliability without claiming more than the character can support"
+            will_say = runtime.suspicions[:1] if readiness >= 2 else ["What makes you say that?"]
             topic = self._first_topic(target_agent)
         elif target_agent and perception.known_facts:
-            action_type = "share_info"
-            intention = "share useful known information with another present character"
-            will_say = perception.known_facts[:2]
+            sayable = self._select_sayable_facts(state, profile, perception, target_agent, "share_info", 0, 1)
+            if sayable and readiness >= 1:
+                action_type = "share_info"
+                intention = "share one safe piece of known information with another present character"
+                will_say = sayable
+            else:
+                action_type = "ask"
+                intention = "ask for more context before taking the lead"
+                will_say = ["Tell me what you noticed before we decide what it means."]
             topic = self._first_topic(target_agent)
         elif target_object:
             action_type = "inspect"
@@ -109,10 +125,95 @@ class AgentMindService:
             behavioral_leak_risk=self._behavioral_risk(profile, action_type),
             risk_level="medium" if action_type in {"withhold", "lie", "challenge"} else "low",
             pressure_level=1 if action_type in {"ask", "challenge", "accuse"} else 0,
+            private_interest=self._private_interest(profile),
+            conflict_buttons=self._conflict_buttons(profile, action_type),
+            claimed_fact_ids=self._fact_ids_for_texts(state, will_say),
+            claim_mode="known" if action_type in {"share_info", "answer"} and will_say else "unknown",
         )
         runtime.current_intention = intent.intention
         runtime.last_intent_signature = f"{intent.action_type}:{intent.topic}:{intent.target_agents}:{intent.target_object}:{intent.target_location}"
         return intent
+
+    def decide_reaction_intent(
+        self,
+        state: WorldState,
+        profile: CharacterProfile,
+        perception: AgentPerception,
+        current_speaker: str,
+        spoken_segment: SpeechSegment,
+        turn_state: TurnState,
+        interaction_context: dict | None = None,
+    ) -> ReactionIntent:
+        focus = spoken_segment.exposes_fact_ids[0] if spoken_segment.exposes_fact_ids else spoken_segment.content_summary
+        buttons = set(self._conflict_buttons(profile, "challenge"))
+        text = ""
+        reaction_type = "hold"
+        urgency = 0
+        pressure_delta = 0
+        reason = "no immediate need to take the turn"
+        if spoken_segment.exposes_fact_ids and buttons & {"secret_exposure", "information_control"}:
+            reaction_type = "block_disclosure"
+            urgency = 5
+            pressure_delta = 2
+            text = "Stop. Don't say more about that."
+            reason = "the segment threatens controlled information"
+        elif spoken_segment.trigger_keywords and buttons & {"fear_trigger", "personal_stakes", "goal_obstruction"}:
+            reaction_type = "challenge"
+            urgency = 3
+            pressure_delta = 1
+            text = "Why are you bringing that up now?"
+            reason = "the segment presses a conflict button"
+        elif spoken_segment.exposure_level in {"medium", "high"}:
+            reaction_type = "observe"
+            urgency = 1
+            reason = "the segment may reveal useful information"
+        return ReactionIntent(
+            reaction_id=f"react_{state.tick:04d}_{profile.id}_{spoken_segment.segment_id}",
+            agent_id=profile.id,
+            reaction_type=reaction_type,
+            trigger_segment_id=spoken_segment.segment_id,
+            target_speaker=current_speaker,
+            spoken_text=text,
+            reason=reason,
+            urgency=urgency,
+            pressure_delta=pressure_delta,
+            focus=focus,
+            intent_source="agent_mind",
+        )
+
+    def decide_post_interruption_reaction(
+        self,
+        state: WorldState,
+        profile: CharacterProfile,
+        interruption_result: InterruptionResult,
+        facts_already_revealed: list[str],
+        facts_prevented: list[str],
+        pressure: int,
+    ) -> ReactionIntent:
+        reaction_type = "continue_speaking"
+        spoken_text = "Let me finish."
+        reason = "try to continue after being interrupted"
+        if profile.secrets or facts_prevented:
+            reaction_type = "deflect" if pressure >= 3 else "redirect"
+            spoken_text = "That's not the point right now."
+            reason = "avoid reopening the prevented disclosure"
+        elif pressure >= 4:
+            reaction_type = "challenge"
+            spoken_text = "Why are you stopping me?"
+            reason = "pressure makes the interruption feel hostile"
+        return ReactionIntent(
+            reaction_id=f"post_react_{state.tick:04d}_{profile.id}_{interruption_result.interruption_id}",
+            agent_id=profile.id,
+            reaction_type=reaction_type,
+            trigger_segment_id=interruption_result.trigger_segment_id,
+            target_speaker=interruption_result.interrupter,
+            spoken_text=spoken_text,
+            reason=reason,
+            urgency=max(1, pressure // 2),
+            pressure_delta=1 if reaction_type in {"challenge", "continue_speaking"} else 0,
+            focus=",".join(facts_prevented or facts_already_revealed),
+            intent_source="agent_mind",
+        )
 
     def _llm_intent(
         self,
@@ -143,6 +244,12 @@ class AgentMindService:
         intent = AgentIntent.model_validate(response)
         if intent.agent_id != profile.id or intent.scene_id != perception.scene_id:
             raise ValueError("LLM intent identity mismatch")
+        if not intent.private_interest:
+            intent.private_interest = self._private_interest(profile)
+        if not intent.conflict_buttons:
+            intent.conflict_buttons = self._conflict_buttons(profile, intent.action_type)
+        if not intent.claimed_fact_ids:
+            intent.claimed_fact_ids = self._fact_ids_for_texts(state, intent.claimed_facts or intent.will_say)
         return intent
 
     def _first_topic(self, target_agent: str) -> Optional[str]:
@@ -152,6 +259,35 @@ class AgentMindService:
     def _first_connected_location(self, location_id: str) -> Optional[str]:
         loc = self.world.map.get_location(location_id)
         return loc.connected_to[0] if loc.connected_to else None
+
+    @staticmethod
+    def _private_interest(profile: CharacterProfile) -> str:
+        for key in ("private_motive", "personal_stakes", "withheld_information"):
+            value = getattr(profile, key, "")
+            if value:
+                return str(value)
+        if profile.goals:
+            return str(profile.goals.get("short_term") or profile.goals.get("long_term") or profile.goals)
+        if profile.fears:
+            return f"avoid {profile.fears[0]}"
+        if profile.secrets:
+            return "keep private information controlled"
+        return "preserve current position"
+
+    @staticmethod
+    def _conflict_buttons(profile: CharacterProfile, action_type: str) -> list[str]:
+        buttons = []
+        if profile.secrets or getattr(profile, "withheld_information", ""):
+            buttons.extend(["secret_exposure", "information_control"])
+        if profile.fears:
+            buttons.append("fear_trigger")
+        if profile.personal_stakes or getattr(profile, "private_motive", ""):
+            buttons.append("personal_stakes")
+        if profile.goals:
+            buttons.append("goal_obstruction")
+        if action_type in {"withhold", "lie", "refuse", "retreat", "escape"}:
+            buttons.append("self_preservation")
+        return list(dict.fromkeys(buttons or ["self_preservation"]))
 
     @staticmethod
     def _behavioral_risk(profile: CharacterProfile, action_type: str) -> list[str]:
@@ -164,10 +300,69 @@ class AgentMindService:
             risks.append("guarded_reaction")
         return risks
 
+    def _select_sayable_facts(
+        self,
+        state: WorldState,
+        profile: CharacterProfile,
+        perception: AgentPerception,
+        target_agent: str | None,
+        action_type: str,
+        pressure: int,
+        round_no: int,
+    ) -> list[str]:
+        direct_actions = {"answer", "share_info", "trade_info"}
+        if action_type not in direct_actions and pressure < 3:
+            return []
+        runtime = state.characters[profile.id]
+        relationship = runtime.relationships.get(target_agent) if target_agent else None
+        trust = relationship.trust if relationship else 0
+        suspicion = relationship.suspicion if relationship else 0
+        candidates: list[tuple[int, str]] = []
+        for fact_id, entry in state.world.fact_exposure.items():
+            if profile.id not in entry.known_by:
+                continue
+            if entry.truth not in perception.known_facts and fact_id not in perception.known_facts:
+                continue
+            if entry.truth in profile.secrets or fact_id in profile.secrets:
+                continue
+            if pressure < entry.min_pressure_to_reveal:
+                continue
+            if round_no < entry.min_rounds_to_reveal:
+                continue
+            if suspicion > trust + 1 and pressure < 3:
+                continue
+            sensitive = entry.reveal_stage in {"hidden_fact", "secret", "forbidden"}
+            if sensitive and pressure < max(3, entry.min_pressure_to_reveal):
+                continue
+            score = trust - suspicion + pressure - int(sensitive)
+            candidates.append((score, entry.truth))
+        candidates.sort(reverse=True)
+        limit = 1 if pressure >= 3 else 2
+        return [truth for _, truth in candidates[:limit]]
+
+    @staticmethod
+    def _leadership_readiness(state: WorldState, profile: CharacterProfile) -> int:
+        runtime = state.characters[profile.id]
+        evidence = len(runtime.known_facts)
+        trusted_ties = sum(1 for rel in runtime.relationships.values() if rel.trust > rel.suspicion)
+        danger_words = {"danger", "protect", "leader", "decisive", "brave", "冷静", "果断", "保护"}
+        traits = profile.personality.get("traits") if isinstance(profile.personality, dict) else []
+        trait_text = " ".join(str(item) for item in (traits if isinstance(traits, list) else [traits]))
+        role_text = f"{profile.role} {' '.join(profile.narrative_function)} {trait_text}".lower()
+        pressure = max((entry.min_pressure_to_reveal for entry in state.world.fact_exposure.values() if profile.id in entry.known_by), default=0)
+        readiness = 0
+        if evidence >= 2:
+            readiness += 1
+        if trusted_ties:
+            readiness += 1
+        if pressure >= 3 or any(word in role_text for word in danger_words):
+            readiness += 1
+        return readiness
+
     @staticmethod
     def _fact_ids_for_texts(state: WorldState, texts: list[str]) -> list[str]:
         fact_ids = []
         for fact_id, entry in state.world.fact_exposure.items():
-            if entry.truth in texts or fact_id in texts:
+            if entry.truth in texts or fact_id in texts or entry.public_label in texts:
                 fact_ids.append(fact_id)
         return fact_ids

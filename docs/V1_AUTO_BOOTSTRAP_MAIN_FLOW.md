@@ -272,7 +272,7 @@ Request:
 {
   "world_id": "world_auto_...",
   "mode": "llm",
-  "v2_phase": "v2.3",
+  "v2_phase": "v2.4",
   "ticks": null,
   "seed": 12345,
   "genre_id": "horror",
@@ -281,7 +281,7 @@ Request:
 }
 ```
 
-说明：当前服务端会强制使用 `mode=llm`、`v2_phase=v2.3`。
+说明：当前服务端会强制使用 `mode=llm`、`v2_phase=v2.4`。
 
 ### 6.6 `GET /api/simulations/{sim_id}/status`
 
@@ -296,7 +296,7 @@ Response:
   "error": null,
   "simulation_id": "sim_...",
   "runtime_mode": "llm",
-  "runtime_phase": "v2.3"
+  "runtime_phase": "v2.4"
 }
 ```
 

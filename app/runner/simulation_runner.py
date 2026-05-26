@@ -20,11 +20,8 @@ from rich.console import Console
 from app.core.time_utils import add_minutes
 from app.models.event import EventLog, PlotValue
 from app.models.world import WorldConfig
-from app.services.character_agent_service import CharacterAgentService
-from app.services.director_service import DirectorService
 from app.services.environment_engine import EnvironmentEngine
 from app.services.event_log_service import EventLogService
-from app.services.intervention_service import InterventionService
 from app.services.memory_service import MemoryService
 from app.services.narrative_service import NarrativeService
 from app.services.plot_arc_service import PlotArcService
@@ -36,7 +33,7 @@ from app.services.world_state_service import WorldStateService
 
 
 AgentMode = Literal["scripted", "heuristic", "llm"]
-V2Phase = Literal["v2.1", "v2.2", "v2.3", "v2.4"]
+V2Phase = Literal["v2.4"]
 
 
 @dataclass
@@ -85,7 +82,10 @@ class SimulationRunner:
         simulation_id = sim_dir.name
         tick_limit = ticks if ticks is not None else world.chapter_goal.tick_limit
 
-        feature_flags = self._resolve_feature_flags(v2_phase)
+        if v2_phase not in (None, "v2.4"):
+            raise ValueError("旧阶段 v2.1/v2.2/v2.3 已删除，SimulationRunner 仅支持 v2.4")
+        v2_phase = "v2.4"
+        feature_flags = self._resolve_feature_flags()
 
         run_manager = RunManagerLite(
             sim_dir=sim_dir,
@@ -104,45 +104,24 @@ class SimulationRunner:
             from app.llm_client import OpenAICompatibleClient
 
             llm_client = OpenAICompatibleClient.from_config(self.project_root) if mode == "llm" else None
-            agent_svc = CharacterAgentService(
+            env = EnvironmentEngine(world=world, llm_client=llm_client)
+
+            tension_monitor = TensionMonitor(window_size=5)
+            plot_arc_service = PlotArcService(self.project_root / "worlds", world.world_id)
+            from app.services.agent_sandbox_loop import AgentSandboxLoop
+            sandbox_loop = AgentSandboxLoop(
+                project_root=self.project_root,
+                sim_dir=sim_dir,
                 world=world,
                 mode=mode,
+                environment=env,
+                event_service=self.event_svc,
                 memory_service=memory_service,
                 llm_client=llm_client,
                 trace_service=trace_service,
+                plot_arc_service=plot_arc_service,
                 temperature=temperature,
-                max_retries=max_retries,
             )
-            env = EnvironmentEngine(world=world, llm_client=llm_client)
-
-            sandbox_loop = None
-
-            tension_monitor = TensionMonitor(window_size=5)
-            director_service = DirectorService(self.project_root / "worlds" / world.world_id)
-            intervention_service = InterventionService(sim_dir)
-            plot_arc_service = PlotArcService(self.project_root / "worlds", world.world_id)
-            if feature_flags.get("enable_agent_sandbox"):
-                from app.services.agent_sandbox_loop import AgentSandboxLoop
-                sandbox_loop = AgentSandboxLoop(
-                    project_root=self.project_root,
-                    sim_dir=sim_dir,
-                    world=world,
-                    mode=mode,
-                    environment=env,
-                    event_service=self.event_svc,
-                    memory_service=memory_service,
-                    llm_client=llm_client,
-                    trace_service=trace_service,
-                    plot_arc_service=plot_arc_service,
-                    temperature=temperature,
-                )
-            chapter_continuity_service = None
-
-            try:
-                from app.services.chapter_continuity_service import ChapterContinuityService
-                chapter_continuity_service = ChapterContinuityService(sim_dir)
-            except ImportError:
-                pass
 
             state = self.state_svc.init_state(simulation_id=simulation_id, world=world, seed=seed)
             self.state_svc.save(sim_dir, state)
@@ -156,117 +135,16 @@ class SimulationRunner:
 
             env.plot_arc_service = plot_arc_service
 
-            # P1 新：多角色调度 + 可见性过滤
-            from app.services.multi_agent_scheduler import MultiAgentScheduler
-            from app.services.visible_event_filter import VisibleEventFilter
-            agent_scheduler = MultiAgentScheduler(world)
-            visible_filter = VisibleEventFilter()
-
             for t in range(1, tick_limit + 1):
                 state.tick = t
                 pov_id = world.chapter_goal.pov
 
-                if sandbox_loop:
-                    recent_events = self.event_svc.read_all(sim_dir)
-                    sandbox_result = sandbox_loop.run_tick(state, recent_events[-20:])
-                    for event_id in sandbox_result.event_ids:
-                        matching = [e for e in self.event_svc.read_all(sim_dir) if e.event_id == event_id]
-                        for ev in matching:
-                            tension_monitor.record_event(ev)
-                    current_events = self.event_svc.read_all(sim_dir)
-                    hint = monitor.update_and_maybe_hint(state, current_events)
-                    if hint:
-                        hint_event = EventLog(
-                            event_id=f"evt_soft_hint_{t:04d}",
-                            event_level="plot",
-                            time=state.world_time,
-                            event_type="soft_hint",
-                            location_id=state.characters[pov_id].location_id,
-                            actors=[pov_id],
-                            action=None,
-                            result=hint.text,
-                            visible_to=[pov_id],
-                            plot_value=PlotValue(mystery=1, novelty=1),
-                        )
-                        self.event_svc.append(sim_dir, hint_event)
-                        if memory_service:
-                            memory_service.write_from_event(hint_event, state)
-                        tension_monitor.record_event(hint_event)
-                    state.world_time = add_minutes(state.world_time, 5)
-                    self.state_svc.save(sim_dir, state)
-                    run_manager.save_snapshot(state)
-                    run_manager.mark_running(state)
-                    if state.chapter_goal_status.completed:
-                        break
-                    continue
-
-                # P1（plan §14）：用 MultiAgentScheduler 决定行动顺序
-                #   1) 主角 2) 同地点 NPC  3) 隐藏行动者  4) 其他
-                character_order = agent_scheduler.build_order(state)
-
-                for cid in character_order:
-                    # 若当前角色不在 state.characters 里（例如剧情杀的缺席人物），跳过
-                    if cid not in state.characters:
-                        continue
-
-                    last_events = self.event_svc.read_all(sim_dir)
-                    last_events_text = [f"{e.time} {e.event_type}: {e.result}" for e in last_events[-8:]]
-                    ctx = agent_svc.build_context(state, cid, last_events_text=last_events_text)
-
-                    plot_ctx = plot_arc_service.to_context_dict() if plot_arc_service else {}
-                    ctx.plot_arc_stage = plot_ctx.get("arc_stage", "")
-                    ctx.plot_arc_purpose = plot_ctx.get("chapter_goal", "")
-                    ctx.forbidden_revelations = plot_ctx.get("forbidden_revelations", [])
-
-                    if chapter_continuity_service:
-                        ctx.previous_chapter_summary = ""
-                        ctx.open_threads = []
-                        ctx.next_chapter_seeds = []
-
-                    action = agent_svc.decide_next_action(state, ctx)
-                    if not feature_flags["allow_move"] and action.action_type == "move":
-                        action.action_type = "wait"
-                        action.target = ""
-                        action.topic = None
-                        action.intent = "当前阶段禁用 move，先观察现场"
-                        action.expected_gain = "避免跨地点移动导致阶段偏差"
-                    applied = env.apply_action(state, action)
-
-                    # P1（plan §19）：VisibleEventFilter 给事件打 visible_to 标签
-                    #  - hidden_actor 的事件不会让主角直接看见
-                    filtered_events = visible_filter.filter_events(
-                        applied.new_events, pov_id, agent_scheduler
-                    )
-                    for ev in filtered_events:
-                        self.event_svc.append(sim_dir, ev)
-                        if memory_service:
-                            memory_service.write_from_event(ev, state)
+                recent_events = self.event_svc.read_all(sim_dir)
+                sandbox_result = sandbox_loop.run_tick(state, recent_events[-20:])
+                for event_id in sandbox_result.event_ids:
+                    matching = [e for e in self.event_svc.read_all(sim_dir) if e.event_id == event_id]
+                    for ev in matching:
                         tension_monitor.record_event(ev)
-
-                tension_report = tension_monitor.generate_report(simulation_id, t)
-                if tension_report.need_intervention:
-                    self._log(f"[!] Tick {t}: 剧情张力异常")
-                    for issue in tension_report.diagnosis[:2]:
-                        self._log(f"   - {issue}")
-
-                    proposal = director_service.propose_intervention(
-                        state=state,
-                        tension_report=tension_report,
-                        chapter_goal=world.chapter_goal.goal,
-                    )
-                    if proposal:
-                        self._log(f"[Director] 干预: {proposal.intervention_type}")
-                        self._log(f"   → {proposal.content}")
-                        director_service.last_intervention_tick = t
-                        intervention_event = intervention_service.apply_intervention(proposal, state, pov_id)
-                        if intervention_event:
-                            ev = intervention_service.to_event_log(intervention_event)
-                            ev.time = state.world_time
-                            self.event_svc.append(sim_dir, ev)
-                            if memory_service:
-                                memory_service.write_from_event(ev, state)
-                            tension_monitor.record_event(ev)
-
                 current_events = self.event_svc.read_all(sim_dir)
                 hint = monitor.update_and_maybe_hint(state, current_events)
                 if hint:
@@ -286,17 +164,13 @@ class SimulationRunner:
                     if memory_service:
                         memory_service.write_from_event(hint_event, state)
                     tension_monitor.record_event(hint_event)
-
                 state.world_time = add_minutes(state.world_time, 5)
                 self.state_svc.save(sim_dir, state)
                 run_manager.save_snapshot(state)
                 run_manager.mark_running(state)
-
                 if state.chapter_goal_status.completed:
                     break
 
-            director_service.save_history(sim_dir)
-            intervention_service.save_history()
             plot_arc_service.save_state(sim_dir) if hasattr(plot_arc_service, 'save_state') else None
             self.state_svc.save(sim_dir, state)
 
@@ -320,7 +194,7 @@ class SimulationRunner:
             else:
                 self._log("Memory Stats: disabled for this phase")
 
-            narrative_llm = agent_svc._llm if mode == "llm" else None
+            narrative_llm = llm_client if mode == "llm" else None
             narrative_service = NarrativeService(
                 world,
                 sim_dir,
@@ -328,6 +202,7 @@ class SimulationRunner:
                 trace_service,
                 force_rule_based=feature_flags["force_rule_narrative"],
                 enable_consistency_check=feature_flags["enable_consistency_revise"],
+                state=state,
             )
             result = narrative_service.generate_chapter()
 
@@ -408,8 +283,7 @@ class SimulationRunner:
             except Exception as e:
                 self._log(f"[!] Quality evaluation failed: {e}")
 
-            if v2_phase:
-                self._write_v2_report(sim_dir, v2_phase, feature_flags, mode, tick_limit, state.tick)
+            self._write_v2_report(sim_dir, v2_phase, feature_flags, mode, tick_limit, state.tick, state)
 
             run_manager.complete(state)
             self._log(f"Simulation {simulation_id} finished at tick={state.tick}.")
@@ -439,55 +313,15 @@ class SimulationRunner:
         return sim_dir
 
     @staticmethod
-    def _resolve_feature_flags(v2_phase: Optional[V2Phase]) -> dict:
-        if not v2_phase:
-            return {
-                "allow_move": True,
-                "enable_memory": True,
-                "force_rule_narrative": False,
-                "enable_consistency_revise": True,
-                "enable_agent_sandbox": False,
-                "enable_fact_exposure_matrix": False,
-                "enable_multi_round_interaction": False,
-            }
-        if v2_phase == "v2.1":
-            return {
-                "allow_move": False,
-                "enable_memory": False,
-                "force_rule_narrative": True,
-                "enable_consistency_revise": False,
-                "enable_agent_sandbox": False,
-                "enable_fact_exposure_matrix": False,
-                "enable_multi_round_interaction": False,
-            }
-        if v2_phase == "v2.2":
-            return {
-                "allow_move": True,
-                "enable_memory": False,
-                "force_rule_narrative": True,
-                "enable_consistency_revise": False,
-                "enable_agent_sandbox": False,
-                "enable_fact_exposure_matrix": False,
-                "enable_multi_round_interaction": False,
-            }
-        if v2_phase == "v2.4":
-            return {
-                "allow_move": True,
-                "enable_memory": True,
-                "force_rule_narrative": False,
-                "enable_consistency_revise": True,
-                "enable_agent_sandbox": True,
-                "enable_fact_exposure_matrix": True,
-                "enable_multi_round_interaction": True,
-            }
+    def _resolve_feature_flags() -> dict:
         return {
             "allow_move": True,
             "enable_memory": True,
             "force_rule_narrative": False,
             "enable_consistency_revise": True,
-            "enable_agent_sandbox": False,
-            "enable_fact_exposure_matrix": False,
-            "enable_multi_round_interaction": False,
+            "enable_agent_sandbox": True,
+            "enable_fact_exposure_matrix": True,
+            "enable_multi_round_interaction": True,
         }
 
     @staticmethod
@@ -498,20 +332,70 @@ class SimulationRunner:
         mode: AgentMode,
         tick_limit: int,
         finished_tick: int,
+        state=None,
     ) -> None:
+        metrics = SimulationRunner._v2_sandbox_metrics(sim_dir, state)
         report = {
-            "phase": v2_phase,
+            "phase": "v2.4",
             "mode": mode,
             "tick_limit": tick_limit,
             "finished_tick": finished_tick,
             "feature_flags": feature_flags,
+            "sandbox_metrics": metrics,
             "artifacts": {
                 "events": "events.jsonl",
                 "state": "state.json",
                 "chapter_plan": "chapter_plan.json",
                 "chapter_draft": "chapter_draft.md",
+                "chapter_debug": "chapter_debug.json",
                 "consistency_report": "consistency_report.json",
             },
         }
         with open(sim_dir / "v2_phase_report.json", "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def _v2_sandbox_metrics(sim_dir: Path, state) -> dict:
+        fact_entries = list(getattr(getattr(state, "world", None), "fact_exposure", {}).values()) if state else []
+        interaction_count = 0
+        scene_conflict_count = 0
+        agent_reaction_count = 0
+        group_decision_count = 0
+        private_tendency_trigger_count = 0
+        relationship_update_count = 0
+        interaction_event_count = 0
+        events_file = sim_dir / "events.jsonl"
+        if events_file.exists():
+            try:
+                with open(events_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        event = json.loads(line)
+                        if event.get("interaction_id"):
+                            interaction_count += 1
+                        source = event.get("source_interaction") or {}
+                        metrics = source.get("agent_debug_metrics") or {}
+                        agent_reaction_count += int(metrics.get("agent_reaction_count", 0))
+                        group_decision_count += int(metrics.get("group_decision_count", 0))
+                        private_tendency_trigger_count += int(metrics.get("private_tendency_trigger_count", 0))
+                        relationship_update_count += int(metrics.get("relationship_update_count", 0))
+                        interaction_event_count += int(metrics.get("interaction_event_count", 0))
+                        primary_conflict = source.get("primary_conflict") or {}
+                        if primary_conflict:
+                            scene_conflict_count += 1
+            except Exception:
+                pass
+        return {
+            "fact_count": len(fact_entries),
+            "known_edges": sum(len(entry.known_by) for entry in fact_entries),
+            "suspected_edges": sum(len(entry.suspected_by) for entry in fact_entries),
+            "misunderstood_edges": sum(len(entry.misunderstood_by) for entry in fact_entries),
+            "interaction_count": interaction_count,
+            "scene_conflict_count": scene_conflict_count,
+            "agent_reaction_count": agent_reaction_count,
+            "group_decision_count": group_decision_count,
+            "private_tendency_trigger_count": private_tendency_trigger_count,
+            "relationship_update_count": relationship_update_count,
+            "interaction_event_count": interaction_event_count,
+        }

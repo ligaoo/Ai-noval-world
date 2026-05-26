@@ -94,7 +94,7 @@ ParsedSeed:
         return [
             CharacterWithAgent(
                 character_id="char_protagonist",
-                name="主角",
+                name="林砚",
                 role="protagonist",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -118,7 +118,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_visible_ally_1",
-                name="被卷入的同行者",
+                name="许照",
                 role="survivor",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -133,7 +133,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_visible_ally_2",
-                name="持异议的同行者",
+                name="周岚",
                 role="survivor",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -148,7 +148,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_hidden_actor",
-                name="未露面的行动者",
+                name="程疏影",
                 role="hidden_actor",
                 active_agent=True,
                 visibility="hidden",
@@ -166,7 +166,7 @@ ParsedSeed:
         parsed: ParsedSeed,
         gate_location_id: str,
     ) -> List[CharacterWithAgent]:
-        protagonist_name = "主角"
+        protagonist_name = "林砚"
         missing_name = self._absent_name(parsed)
         location = parsed.core_location or "此处"
 
@@ -197,7 +197,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_gatekeeper",
-                name="守口如瓶的知情人",
+                name="沈伯衡",
                 role="gatekeeper",
                 active_agent=True,
                 location_id=gate_location_id,
@@ -217,7 +217,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_witness",
-                name="不安的信息提供者",
+                name="罗敏",
                 role="witness",
                 active_agent=True,
                 location_id="location_witness_point",
@@ -229,7 +229,7 @@ ParsedSeed:
             ),
             CharacterWithAgent(
                 character_id="npc_hidden_actor",
-                name="未露面的行动者",
+                name="程疏影",
                 role="hidden_actor",
                 active_agent=True,
                 visibility="hidden",
@@ -243,28 +243,70 @@ ParsedSeed:
         ]
 
     def _absent_name(self, parsed: ParsedSeed) -> str:
-        name = parsed.missing_person or "主线关联者"
+        name = parsed.missing_person or "顾行舟"
         if " " in name:
             name = name.split()[-1]
-        return name
+        return "顾行舟" if self._is_placeholder_name(name) else name
+
+    @staticmethod
+    def _is_placeholder_name(name: str) -> bool:
+        text = (name or "").strip()
+        if not text:
+            return True
+        exact = {
+            "主角", "同行者甲", "同行者乙", "同行者丙", "知情者甲", "知情者乙", "目击者甲", "目击者乙",
+            "隐藏行动者", "未露面的行动者", "神秘人", "缺席者", "失踪者", "主线关联者", "NPC", "NPC1", "NPC2",
+            "被卷入的同行者", "持异议的同行者", "主要视角角色", "关键角色", "不安的目击者",
+            "守口如瓶的知情人", "不安的信息提供者",
+        }
+        if text in exact:
+            return True
+        patterns = [
+            r"^同行者[甲乙丙丁]$",
+            r"^知情者[甲乙丙丁]$",
+            r"^目击者[甲乙丙丁]$",
+            r"^NPC\d*$",
+            r".*同行者$",
+            r".*行动者$",
+            r".*信息提供者$",
+            r".*知情人$",
+            r".*目击者$",
+        ]
+        return any(re.fullmatch(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+    def _replacement_name(
+        self,
+        character: CharacterWithAgent,
+        parsed: ParsedSeed,
+        index: int,
+        used_names: set[str],
+    ) -> str:
+        if character.role == "missing_person":
+            candidates = [self._absent_name(parsed), "顾行舟", "许知远"]
+        elif character.role == "protagonist":
+            candidates = ["林砚", "陈明棠", "叶初衡"]
+        elif character.visibility == "hidden" or character.role == "hidden_actor":
+            candidates = ["程疏影", "陆微澜", "韩述"]
+        elif character.role == "gatekeeper":
+            candidates = ["沈伯衡", "秦守安", "丁槐"]
+        elif character.role == "witness":
+            candidates = ["罗敏", "何青禾", "赵闻溪"]
+        elif character.role == "survivor":
+            candidates = ["许照", "周岚", "孟其声", "唐棠"]
+        else:
+            candidates = ["梁既白", "苏明夏", "江予安", "白承宁"]
+        for candidate in candidates:
+            if not self._is_placeholder_name(candidate) and candidate not in used_names:
+                return candidate
+        return f"{candidates[-1]}{index}"
 
     def _polish_cast(self, cast: List[CharacterWithAgent], parsed: ParsedSeed) -> List[CharacterWithAgent]:
-        role_names = {
-            "protagonist": "主要视角角色",
-            "missing_person": self._absent_name(parsed),
-            "hidden_actor": "未露面的行动者",
-            "gatekeeper": "守口如瓶的知情人",
-            "witness": "不安的目击者",
-            "survivor": "被卷入的同行者",
-        }
-        invalid_names = {"主角", "同行者甲", "同行者乙", "知情者甲", "目击者乙", "隐藏行动者", "缺席者", "失踪者", "神秘人", "NPC", "NPC1", "NPC2"}
         motif = parsed.core_motif or "异常"
         location = parsed.core_location or "现场"
         used_names = set()
         for index, character in enumerate(cast, start=1):
-            if character.name in invalid_names or not character.name.strip():
-                base_name = role_names.get(character.role, "关键角色")
-                character.name = base_name if base_name not in used_names else f"{base_name}{index}"
+            if self._is_placeholder_name(character.name) or character.name in used_names:
+                character.name = self._replacement_name(character, parsed, index, used_names)
             used_names.add(character.name)
             if not character.public_motive:
                 character.public_motive = character.goal or f"在{location}中维持表面秩序"

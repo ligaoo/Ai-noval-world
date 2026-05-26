@@ -21,6 +21,7 @@ from app.services.multi_round_interaction_resolver import MultiRoundInteractionR
 from app.services.perception_resolver import PerceptionResolver
 from app.services.prompt_template_service import PromptTemplateService
 from app.services.sandbox_event_log_writer import SandboxEventLogWriter
+from app.services.scene_conflict_builder import SceneConflictBuilder
 from app.services.scene_presence_tracker import ScenePresenceTracker
 from app.services.trace_service import TraceService
 from app.services.world_state_updater import WorldStateUpdater
@@ -66,9 +67,12 @@ class AgentSandboxLoop:
             self.fact_matrix,
             self.perception_resolver,
             max_rounds=int(policy.get("max_interaction_rounds", 5)),
+            agent_mind=self.agent_mind,
+            world=self.world,
         )
         self.updater = WorldStateUpdater(self.fact_matrix)
-        self.event_writer = SandboxEventLogWriter()
+        self.event_writer = SandboxEventLogWriter(world)
+        self.conflict_builder = SceneConflictBuilder(world)
         self.director_checker = DirectorRiskChecker(world, self.fact_matrix, plot_arc_service)
 
     def run_tick(self, state: WorldState, recent_events: list[EventLog]) -> SandboxTickResult:
@@ -77,6 +81,7 @@ class AgentSandboxLoop:
         perceptions = {}
         intents = []
         interactions = []
+        agent_driven_results = []
         event_ids = []
 
         for scene in scenes:
@@ -97,6 +102,7 @@ class AgentSandboxLoop:
                 intents.append(self.agent_mind.decide_intent(state, profile, perception))
 
             scene_intents = [intent for intent in intents if intent.scene_id == scene.scene_id]
+            scene.goal_conflicts = self.conflict_builder.build_for_scene(state, scene, scene_intents)
             simple_intents, proposals = self.arbitrator.split_intents(scene_intents)
             for intent in simple_intents:
                 event_ids.extend(self._apply_simple_intent(state, scene, intent))
@@ -105,6 +111,8 @@ class AgentSandboxLoop:
                 result = self.director_checker.check_and_correct(state, result)
                 self.updater.apply_interaction_result(state, result)
                 interactions.append(result)
+                if self.interaction_resolver.last_agent_driven_result:
+                    agent_driven_results.append(self.interaction_resolver.last_agent_driven_result)
                 for event in self.event_writer.events_from_interaction(state, result):
                     self.event_service.append(self.sim_dir, event)
                     event_ids.append(event.event_id)
@@ -118,6 +126,7 @@ class AgentSandboxLoop:
             intents=intents,
             interactions=interactions,
             event_ids=event_ids,
+            agent_driven_results=agent_driven_results,
         )
 
     def _apply_simple_intent(self, state: WorldState, scene, intent) -> list[str]:

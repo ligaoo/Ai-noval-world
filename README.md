@@ -118,7 +118,7 @@ npm install
 
 ```bash
 # 标准运行（V1 正式版默认链路）
-python -m app.cli --world dark_city_001 --mode llm --v2-phase v2.3
+python -m app.cli --world dark_city_001 --mode llm --v2-phase v2.4
 
 # 指定目标章节数
 python -m app.cli --world dark_city_001 --mode llm --target-chapters 10
@@ -230,7 +230,7 @@ flowchart TD
 
 ### 运行模式
 
-V1 正式版默认链路：`llm + v2.3`
+V1 正式版默认链路：`llm + v2.4 Agent Sandbox`
 - ✅ move: 开启（角色移动）
 - ✅ memory: 开启（角色记忆）
 - ✅ LLM rewrite: 开启（LLM 正文改写）

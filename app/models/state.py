@@ -36,6 +36,10 @@ class FactExposureEntry(BaseModel):
     source: str = ""
     reveal_stage: str = ""
     created_tick: int = 0
+    public_label: str = ""
+    min_pressure_to_reveal: int = 2
+    min_rounds_to_reveal: int = 2
+    revealed_tick: Optional[int] = None
 
 
 class CharacterRuntimeState(BaseModel):

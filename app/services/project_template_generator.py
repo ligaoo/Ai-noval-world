@@ -98,7 +98,7 @@ class ProjectTemplateGenerator:
         return [
             {
                 "character_id": "protagonist_001",
-                "name": "主角",
+                "name": "林砚",
                 "role": "主角",
                 "description": request.protagonist_seed,
                 "background": f"因个人目标被卷入{request.core_location}的异常处境",
@@ -109,7 +109,7 @@ class ProjectTemplateGenerator:
             },
             {
                 "character_id": "obstructor_001",
-                "name": "阻碍者",
+                "name": "沈伯衡",
                 "role": "阻碍者",
                 "description": f"与{request.core_location}存在利益或秘密关联的人物",
                 "background": "知道部分规则，但不愿主动说明完整事实",
@@ -124,7 +124,7 @@ class ProjectTemplateGenerator:
         return [
             {
                 "npc_id": "npc_witness_001",
-                "name": "目击者",
+                "name": "罗敏",
                 "role": "目击者",
                 "description": f"能从外围观察{request.core_location}变化的人",
                 "background": "只掌握局部事实，担心卷入风险",
@@ -134,7 +134,7 @@ class ProjectTemplateGenerator:
             },
             {
                 "npc_id": "npc_hidden_actor_001",
-                "name": "隐藏行动者",
+                "name": "程疏影",
                 "role": "隐藏行动者",
                 "description": "通过痕迹和后果影响主线的人物或力量",
                 "background": "与核心异常的运行机制存在关联",
