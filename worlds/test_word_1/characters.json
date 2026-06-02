@@ -26,7 +26,6 @@
         "logic": 94
       },
       "initial_location": "location_gate",
-      "background": "被卷入荒废别墅异常处境的人之一，需要在信息不足时组织行动。",
       "active_agent": true,
       "visibility": "visible",
       "narrative_function": [
@@ -34,6 +33,7 @@
         "group_anchor"
       ],
       "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "background": "被卷入荒废别墅异常处境的人之一，需要在信息不足时组织行动。",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],
@@ -64,11 +64,11 @@
         "logic": 85
       },
       "initial_location": "bieshuyilou-1",
-      "background": "",
       "active_agent": true,
       "visibility": "visible",
       "narrative_function": [],
       "personal_stakes": "",
+      "background": "",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],
@@ -90,16 +90,18 @@
       "secrets": [],
       "skills": {
         "observation": 70,
+        "social": 50,
+        "courage": 50,
         "logic": 65
       },
       "initial_location": "location_gate",
-      "background": "曾经与荒废别墅异常有关，当前不在场，但留下的痕迹牵引主线。",
       "active_agent": false,
       "visibility": "absent",
       "narrative_function": [
         "main_thread_anchor"
       ],
       "personal_stakes": "",
+      "background": "曾经与荒废别墅异常有关，当前不在场，但留下的痕迹牵引主线。",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],
@@ -108,7 +110,7 @@
     },
     {
       "id": "npc_visible_ally_1",
-      "name": "同行者甲",
+      "name": "林浩",
       "role": "survivor",
       "personality": {
         "traits": [
@@ -130,10 +132,11 @@
       ],
       "skills": {
         "observation": 70,
+        "social": 50,
+        "courage": 50,
         "logic": 65
       },
       "initial_location": "location_gate",
-      "background": "同样被困在荒废别墅附近，掌握与主角不同的第一手观察。",
       "active_agent": true,
       "visibility": "visible",
       "narrative_function": [
@@ -141,6 +144,7 @@
         "survival_pressure"
       ],
       "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "background": "同样被困在荒废别墅附近，掌握与主角不同的第一手观察。",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],
@@ -149,7 +153,7 @@
     },
     {
       "id": "npc_visible_ally_2",
-      "name": "同行者乙",
+      "name": "王占",
       "role": "survivor",
       "personality": {
         "traits": [
@@ -171,10 +175,11 @@
       ],
       "skills": {
         "observation": 70,
+        "social": 50,
+        "courage": 50,
         "logic": 65
       },
       "initial_location": "location_gate",
-      "background": "与其他人一起面对荒废别墅的异常，但对共同行动是否有效抱有怀疑。",
       "active_agent": true,
       "visibility": "visible",
       "narrative_function": [
@@ -182,6 +187,7 @@
         "conflict_source"
       ],
       "personal_stakes": "被杀人规律杀死或永远困在噩梦",
+      "background": "与其他人一起面对荒废别墅的异常，但对共同行动是否有效抱有怀疑。",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],
@@ -190,7 +196,7 @@
     },
     {
       "id": "npc_hidden_actor",
-      "name": "隐藏行动者",
+      "name": "石强",
       "role": "hidden_actor",
       "personality": {
         "traits": [
@@ -207,10 +213,11 @@
       "secrets": [],
       "skills": {
         "observation": 70,
+        "social": 50,
+        "courage": 50,
         "logic": 65
       },
       "initial_location": "location_inner",
-      "background": "与荒废别墅的异常机制存在关联，只通过痕迹和后果影响可见角色。",
       "active_agent": true,
       "visibility": "hidden",
       "narrative_function": [
@@ -218,6 +225,7 @@
         "trace_only"
       ],
       "personal_stakes": "",
+      "background": "与荒废别墅的异常机制存在关联，只通过痕迹和后果影响可见角色。",
       "known_facts": [],
       "suspicions": [],
       "inventory": [],

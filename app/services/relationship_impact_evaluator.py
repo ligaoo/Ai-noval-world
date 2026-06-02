@@ -183,12 +183,53 @@ class RelationshipImpactEvaluator:
         updates: List[RelationshipImpactUpdate] = []
 
         for trigger in triggers:
+            related_agents = self._related_agents_from_trigger(trigger, state)
             if trigger.trigger_type == "loyalty_override":
-                pass
+                if related_agents:
+                    updates.append(self._impact(trigger.agent_id, related_agents[0], "affinity_gain", 1, trigger))
+                if len(related_agents) > 1:
+                    updates.append(self._impact(trigger.agent_id, related_agents[1], "hostility_rise", 1, trigger))
             elif trigger.trigger_type == "personal_grudge":
-                pass
+                target = related_agents[0] if related_agents else self._first_other_agent(trigger.agent_id, state)
+                if target:
+                    updates.append(self._impact(trigger.agent_id, target, "hostility_rise", 1, trigger))
+            elif trigger.trigger_type == "secret_protection":
+                for observer in self._observers_for_secret_protection(trigger, state):
+                    updates.append(self._impact(observer, trigger.agent_id, "suspicion_rise", 1, trigger))
 
         return updates
+
+    def _impact(
+        self,
+        source: str,
+        target: str,
+        impact_type: str,
+        delta: int,
+        trigger: PrivateTendencyTrigger,
+    ) -> RelationshipImpactUpdate:
+        return RelationshipImpactUpdate(
+            impact_id=f"impact_{uuid.uuid4().hex[:8]}",
+            source_agent=source,
+            target_agent=target,
+            impact_type=impact_type,
+            delta_value=delta,
+            cause=trigger.resulting_bias or trigger.trigger_condition or trigger.trigger_type,
+            evidence_strength=trigger.intensity,
+            is_public=False,
+        )
+
+    @staticmethod
+    def _related_agents_from_trigger(trigger: PrivateTendencyTrigger, state: WorldState) -> List[str]:
+        text = f"{trigger.trigger_condition} {trigger.resulting_bias}"
+        return [agent_id for agent_id in state.characters if agent_id != trigger.agent_id and agent_id in text]
+
+    @staticmethod
+    def _first_other_agent(agent_id: str, state: WorldState) -> str:
+        return next((other_id for other_id in state.characters if other_id != agent_id), "")
+
+    @staticmethod
+    def _observers_for_secret_protection(trigger: PrivateTendencyTrigger, state: WorldState) -> List[str]:
+        return [agent_id for agent_id in state.characters if agent_id != trigger.agent_id]
 
     def _ensure_clue_discovery_relationship_update(
         self,

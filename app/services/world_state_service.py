@@ -8,6 +8,7 @@ from app.models.state import (
     ChapterGoalStatus,
     CharacterRuntimeState,
     FactExposureEntry,
+    GoalRuntimeState,
     RelationshipRuntimeState,
     WorldRuntimeState,
     WorldState,
@@ -47,6 +48,7 @@ class WorldStateService:
                 for other_id in character_ids
                 if other_id != c.id
             }
+            goals = self._runtime_goals_from_profile(c.id, c.goals)
             characters[c.id] = CharacterRuntimeState(
                 location_id=initial_location,
                 mental_state="",
@@ -58,6 +60,8 @@ class WorldStateService:
                 attitude_to={},
                 relationships=relationships,
                 hidden_status=c.visibility,
+                goals=goals,
+                stance={},
             )
 
         fact_exposure: Dict[str, FactExposureEntry] = {}
@@ -101,6 +105,31 @@ class WorldStateService:
                 fact_exposure=fact_exposure,
             ),
         )
+
+    def _runtime_goals_from_profile(self, character_id: str, goals: Dict[str, object]) -> Dict[str, GoalRuntimeState]:
+        runtime_goals: Dict[str, GoalRuntimeState] = {}
+        priority = 10
+        for goal_type in ("short_term", "long_term"):
+            raw_goal = goals.get(goal_type)
+            if not raw_goal:
+                continue
+            goal_items = raw_goal if isinstance(raw_goal, list) else [raw_goal]
+            for index, item in enumerate(goal_items, start=1):
+                description = str(item).strip()
+                if not description:
+                    continue
+                goal_id = f"{character_id}_{goal_type}_{index}"
+                runtime_goals[goal_id] = GoalRuntimeState(
+                    goal_id=goal_id,
+                    owner_agent_id=character_id,
+                    description=description,
+                    goal_type=goal_type,
+                    status="active",
+                    priority=priority,
+                    source="character_profile",
+                )
+                priority -= 1
+        return runtime_goals
 
     def load(self, sim_dir: Path) -> WorldState:
         path = sim_dir / self.STATE_FILE

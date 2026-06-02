@@ -47,20 +47,52 @@ class RunManagerLite:
         self._write_json(path, state.model_dump(mode="json"))
 
     def complete(self, state: WorldState, extra_metrics: Optional[Dict[str, Any]] = None) -> None:
+        self.complete_with_validation(
+            state=state,
+            validation_status="passed",
+            validation_errors=[],
+            extra_metrics=extra_metrics,
+        )
+
+    def complete_with_validation(
+        self,
+        state: WorldState,
+        validation_status: str,
+        validation_errors: Optional[list[Dict[str, Any]]] = None,
+        extra_metrics: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        validation_errors = validation_errors or []
+        run_status = "completed" if validation_status == "passed" else "completed_with_validation_errors"
+        last_error = None
+        if validation_status == "failed":
+            last_error = "Validation failed"
+        elif validation_status == "warning":
+            last_error = "Validation warnings"
         self.write_manifest(finished_at=self._now())
         self.update_status(
-            status="completed",
+            status=run_status,
             current_tick=state.tick,
             current_chapter=1,
             last_event_id=self._last_event_id(),
+            last_error=last_error,
             progress={
                 "ticks_done": state.tick,
                 "tick_limit": self.tick_limit,
                 "chapters_done": 1,
                 "chapter_limit": 1,
             },
+            generation_status="completed",
+            validation_status=validation_status,
+            validation_errors=validation_errors,
         )
-        metrics = self.collect_metrics(state, extra_metrics or {})
+        metrics = self.collect_metrics(
+            state,
+            {
+                **(extra_metrics or {}),
+                "validation_status": validation_status,
+                "validation_errors": validation_errors,
+            },
+        )
         self._write_json(self.sim_dir / "metrics.json", metrics)
         self.write_tuning_report(metrics)
         self.write_index()
@@ -115,6 +147,9 @@ class RunManagerLite:
         last_event_id: Optional[str] = None,
         last_error: Optional[str] = None,
         progress: Optional[Dict[str, int]] = None,
+        generation_status: Optional[str] = None,
+        validation_status: Optional[str] = None,
+        validation_errors: Optional[list[Dict[str, Any]]] = None,
     ) -> None:
         status_data = {
             "simulation_id": self.sim_dir.name,
@@ -131,6 +166,12 @@ class RunManagerLite:
                 "chapter_limit": 1,
             },
         }
+        if generation_status is not None:
+            status_data["generation_status"] = generation_status
+        if validation_status is not None:
+            status_data["validation_status"] = validation_status
+        if validation_errors is not None:
+            status_data["validation_errors"] = validation_errors
         self._write_json(self.sim_dir / "run_status.json", status_data)
 
     def write_index(self) -> None:
@@ -151,6 +192,11 @@ class RunManagerLite:
             "errors.jsonl",
             "llm_traces.jsonl",
             "llm_summary.json",
+            "validation_summary.json",
+            "artifact_consistency_report.json",
+            "encoding_health_report.json",
+            "draft_faithfulness_report.json",
+            "chapter_goal_completion_report.json",
         ]:
             if (self.sim_dir / name).exists():
                 artifacts[name] = name
@@ -183,6 +229,7 @@ class RunManagerLite:
         )
 
         llm_summary = self._read_json(self.sim_dir / "llm_summary.json") or {}
+        validation_summary = self._read_json(self.sim_dir / "validation_summary.json") or {}
 
         return {
             "simulation_id": self.sim_dir.name,
@@ -215,6 +262,16 @@ class RunManagerLite:
                 "total_memories": len(memories),
             },
             "llm": llm_summary,
+            "validation": {
+                "status": extra.get("validation_status") or validation_summary.get("validation_status") or "unknown",
+                "error_count": len(extra.get("validation_errors") or validation_summary.get("validation_errors") or []),
+                "errors": extra.get("validation_errors") or validation_summary.get("validation_errors") or [],
+                "summary": validation_summary,
+                "artifact_consistency": self._read_json(self.sim_dir / "artifact_consistency_report.json") or {},
+                "encoding_health": self._read_json(self.sim_dir / "encoding_health_report.json") or {},
+                "draft_faithfulness": self._read_json(self.sim_dir / "draft_faithfulness_report.json") or {},
+                "chapter_goal_completion": self._read_json(self.sim_dir / "chapter_goal_completion_report.json") or {},
+            },
         }
 
     def write_tuning_report(self, metrics: Dict[str, Any]) -> None:
@@ -223,6 +280,7 @@ class RunManagerLite:
         agent = metrics["agent"]
         director = metrics["director"]
         plot = metrics["plot"]
+        validation = metrics.get("validation") or {}
 
         issues = []
         suggestions = []
@@ -238,6 +296,12 @@ class RunManagerLite:
         if not plot["chapter_goal_completed"]:
             issues.append("章节目标未完成。")
             suggestions.append("调整 chapter_goal.target_progress，或提高关键线索 plot_value.progress。")
+        if validation.get("status") == "failed":
+            issues.append(f"验证失败：{validation.get('error_count', 0)} 个阻断问题。")
+            suggestions.append("查看 validation_summary.json 定位 artifact consistency / encoding / faithfulness / chapter goal 问题。")
+        elif validation.get("status") == "warning":
+            issues.append(f"验证警告：{validation.get('error_count', 0)} 个非阻断或中低风险问题。")
+            suggestions.append("查看 validation_summary.json 和各验证报告确认是否需要修复。")
 
         if not issues:
             issues.append("未发现明显阻塞问题。")
@@ -258,6 +322,15 @@ class RunManagerLite:
             "",
         ]
         lines.extend(f"{i + 1}. {issue}" for i, issue in enumerate(issues))
+        lines.extend(["", "## Validation", ""])
+        validation_status = validation.get("status") or "unknown"
+        lines.append(f"- status: {validation_status}")
+        lines.append(f"- issue_count: {validation.get('error_count', 0)}")
+        lines.append("- summary: validation_summary.json")
+        lines.append("- artifact consistency: artifact_consistency_report.json")
+        lines.append("- encoding health: encoding_health_report.json")
+        lines.append("- draft faithfulness: draft_faithfulness_report.json")
+        lines.append("- chapter goal completion: chapter_goal_completion_report.json")
         lines.extend(["", "## Suggestions", ""])
         lines.extend(f"{i + 1}. {s}" for i, s in enumerate(suggestions))
         lines.append("")

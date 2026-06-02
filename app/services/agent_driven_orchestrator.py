@@ -131,6 +131,8 @@ class AgentDrivenOrchestrator:
     def _relationship_update_to_change(update: RelationshipImpactUpdate) -> dict | None:
         trust_delta = 0
         suspicion_delta = 0
+        hostility_delta = 0
+        affinity_delta = 0
         if update.impact_type == "trust_gain":
             trust_delta = abs(update.delta_value)
         elif update.impact_type == "trust_loss":
@@ -139,6 +141,18 @@ class AgentDrivenOrchestrator:
             suspicion_delta = abs(update.delta_value)
         elif update.impact_type == "suspicion_fall":
             suspicion_delta = -abs(update.delta_value)
+        elif update.impact_type == "hostility_rise":
+            hostility_delta = abs(update.delta_value)
+        elif update.impact_type == "hostility_fall":
+            hostility_delta = -abs(update.delta_value)
+        elif update.impact_type == "affinity_gain":
+            affinity_delta = abs(update.delta_value)
+        elif update.impact_type == "affinity_loss":
+            affinity_delta = -abs(update.delta_value)
+        elif update.impact_type == "respect_gained":
+            trust_delta = abs(update.delta_value)
+        elif update.impact_type == "respect_lost":
+            trust_delta = -abs(update.delta_value)
         else:
             return None
         return {
@@ -146,6 +160,8 @@ class AgentDrivenOrchestrator:
             "to": update.target_agent,
             "trust_delta": trust_delta,
             "suspicion_delta": suspicion_delta,
+            "hostility_delta": hostility_delta,
+            "affinity_delta": affinity_delta,
             "cause": update.cause,
             "impact_type": update.impact_type,
         }

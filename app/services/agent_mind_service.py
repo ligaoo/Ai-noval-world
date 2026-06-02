@@ -70,12 +70,25 @@ class AgentMindService:
         disclosure_policy = profile.disclosure_policy or {}
         has_secret = bool(profile.secrets)
         low_trust_target = False
+        high_trust_target = False
         if target_agent and target_agent in runtime.relationships:
             rel = runtime.relationships[target_agent]
-            low_trust_target = rel.trust < 0 or rel.suspicion > 1
+            low_trust_target = rel.trust < 0 or rel.suspicion > 1 or rel.hostility > 1
+            high_trust_target = rel.trust > 1 or rel.affinity > 1
+        blocked_goal = any(goal.status == "blocked" for goal in runtime.goals.values())
+        unresolved_memory = any(
+            keyword in memory.lower()
+            for memory in perception.relevant_memories
+            for keyword in ["conflict", "unresolved", "隐瞒", "怀疑", "冲突"]
+        )
 
         readiness = self._leadership_readiness(state, profile)
-        if target_agent and has_secret and disclosure_policy.get("can_withhold", True):
+        if target_agent and blocked_goal:
+            action_type = "challenge" if low_trust_target or unresolved_memory else "suggest"
+            intention = "press for a path around a blocked personal goal"
+            will_say = [perception.active_goals[0]] if perception.active_goals else ["We need to settle what is blocking us."]
+            topic = self._first_topic(target_agent)
+        elif target_agent and has_secret and disclosure_policy.get("can_withhold", True) and (low_trust_target or unresolved_memory):
             action_type = "withhold"
             intention = "avoid exposing private information while staying responsive"
             will_hide = list(profile.secrets[:3])
@@ -83,10 +96,16 @@ class AgentMindService:
             if not will_say:
                 will_say = ["I need to understand what you saw first."]
             topic = self._first_topic(target_agent)
-        elif target_agent and (runtime.suspicions or low_trust_target):
-            action_type = "challenge" if readiness >= 2 else "ask"
+        elif target_agent and (runtime.suspicions or low_trust_target or unresolved_memory):
+            action_type = "accuse" if low_trust_target and readiness >= 3 else ("challenge" if readiness >= 2 else "ask")
             intention = "test reliability without claiming more than the character can support"
-            will_say = runtime.suspicions[:1] if readiness >= 2 else ["What makes you say that?"]
+            will_say = runtime.suspicions[:1] if readiness >= 2 and runtime.suspicions else ["What makes you say that?"]
+            topic = self._first_topic(target_agent)
+        elif target_agent and high_trust_target and perception.known_facts:
+            sayable = self._select_sayable_facts(state, profile, perception, target_agent, "share_info", 0, 1)
+            action_type = "share_info" if sayable else "ask"
+            intention = "support a trusted present character by keeping discussion focused on verification"
+            will_say = sayable or ["I am with you on this, but we should verify it carefully."]
             topic = self._first_topic(target_agent)
         elif target_agent and perception.known_facts:
             sayable = self._select_sayable_facts(state, profile, perception, target_agent, "share_info", 0, 1)

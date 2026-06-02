@@ -8,14 +8,14 @@
         </h2>
         <p class="text-gray-400 mt-1">创建和管理小说中的角色</p>
       </div>
-      <PButton label="添加角色" icon="pi pi-plus" @click="showAddDialog = true" />
+      <PButton label="添加角色" icon="pi pi-plus" @click="openAddDialog" />
     </div>
 
     <!-- 角色列表 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div
         v-for="(character, index) in characters"
-        :key="character.character_id"
+        :key="character.character_id || character.id || index"
         class="glass-card p-6 hover-lift cursor-pointer group"
         @click="openCharacter(index)"
       >
@@ -97,7 +97,7 @@
       <!-- 添加角色卡片 -->
       <div
         class="glass-card p-6 hover-lift flex flex-col items-center justify-center cursor-pointer border-dashed border-2 border-noir-600 hover:border-neon-purple transition-colors"
-        @click="showAddDialog = true"
+        @click="openAddDialog"
       >
         <div class="w-14 h-14 rounded-2xl bg-noir-700 flex items-center justify-center mb-4 group-hover:bg-neon-purple/20 transition-colors">
           <Plus class="w-7 h-7 text-gray-400 group-hover:text-neon-purple transition-colors" />
@@ -222,7 +222,7 @@
       </div>
 
       <template #footer>
-        <PButton label="取消" severity="secondary" text @click="showAddDialog = false" />
+        <PButton label="取消" severity="secondary" text @click="closeDialog" />
         <PButton label="保存" @click="saveCharacter" />
       </template>
     </PDialog>
@@ -241,7 +241,7 @@ const characters = computed(() => worldStore.characters)
 const showAddDialog = ref(false)
 const newTrait = ref('')
 
-const newCharacter = ref({
+const createEmptyCharacter = () => ({
   character_id: '',
   name: '',
   role: '',
@@ -258,6 +258,23 @@ const newCharacter = ref({
     logic: 50,
   },
 })
+
+const normalizeCharacterForEdit = (character = {}) => ({
+  ...createEmptyCharacter(),
+  ...character,
+  character_id: character.character_id || character.id || '',
+  traits: character.traits || character.personality?.traits || [],
+  goals: {
+    ...createEmptyCharacter().goals,
+    ...(character.goals || {}),
+  },
+  skills: {
+    ...createEmptyCharacter().skills,
+    ...(character.skills || {}),
+  },
+})
+
+const newCharacter = ref(createEmptyCharacter())
 
 const agentTypeOptions = [
   { label: '核心主角', value: 'core_agent' },
@@ -322,46 +339,86 @@ function addTrait() {
 
 const editingIndex = ref(-1)
 
-function openCharacter(index) {
-  editingIndex.value = index
-  const char = characters.value[index]
-  newCharacter.value = JSON.parse(JSON.stringify(char))
+function resetForm() {
+  editingIndex.value = -1
+  newTrait.value = ''
+  newCharacter.value = createEmptyCharacter()
+}
+
+function openAddDialog() {
+  resetForm()
   showAddDialog.value = true
 }
 
-function deleteCharacter(index) {
-  if (confirm('确定删除这个角色吗？')) {
-    worldStore.removeCharacter(index)
+function closeDialog() {
+  showAddDialog.value = false
+  resetForm()
+}
+
+function openCharacter(index) {
+  editingIndex.value = index
+  const char = characters.value[index]
+  newCharacter.value = normalizeCharacterForEdit(JSON.parse(JSON.stringify(char)))
+  showAddDialog.value = true
+}
+
+function getCurrentWorldId() {
+  return worldStore.worldBible?.world_id || worldStore.worldId || ''
+}
+
+async function persistCharacters() {
+  const worldId = getCurrentWorldId()
+  if (!worldId) return
+
+  const response = await fetch(`http://localhost:8421/api/worlds/${worldId}/characters`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      characters: worldStore.characters,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null)
+    throw new Error(error?.detail?.message || error?.detail || '角色保存到后端失败')
   }
 }
 
-function saveCharacter() {
-  if (newCharacter.value.character_id && newCharacter.value.name) {
-    if (editingIndex.value >= 0) {
-      worldStore.updateCharacter(editingIndex.value, { ...newCharacter.value })
-    } else {
-      worldStore.addCharacter({ ...newCharacter.value })
+async function deleteCharacter(index) {
+  if (confirm('确定删除这个角色吗？')) {
+    worldStore.removeCharacter(index)
+    try {
+      await persistCharacters()
+    } catch (error) {
+      alert(`角色已从前端删除，但同步到模拟配置失败：${error.message}`)
     }
-    showAddDialog.value = false
-    // 重置表单
-    editingIndex.value = -1
-    newCharacter.value = {
-      character_id: '',
-      name: '',
-      role: '',
-      agent_type: 'core_agent',
-      traits: [],
-      goals: {
-        short_term: '',
-        long_term: '',
-      },
-      skills: {
-        observation: 50,
-        social: 50,
-        courage: 50,
-        logic: 50,
-      },
-    }
+  }
+}
+
+async function saveCharacter() {
+  const character = normalizeCharacterForEdit(newCharacter.value)
+  character.character_id = character.character_id.trim()
+  character.name = character.name.trim()
+  character.id = character.character_id
+
+  if (!character.character_id || !character.name) {
+    alert('请填写角色 ID 和角色姓名')
+    return
+  }
+
+  if (editingIndex.value >= 0) {
+    worldStore.updateCharacter(editingIndex.value, character)
+  } else {
+    worldStore.addCharacter(character)
+  }
+
+  try {
+    await persistCharacters()
+    closeDialog()
+  } catch (error) {
+    alert(`角色已保存到前端，但同步到模拟配置失败：${error.message}`)
   }
 }
 </script>

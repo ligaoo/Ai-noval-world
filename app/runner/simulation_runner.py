@@ -20,6 +20,9 @@ from rich.console import Console
 from app.core.time_utils import add_minutes
 from app.models.event import EventLog, PlotValue
 from app.models.world import WorldConfig
+from app.services.artifact_consistency_validator import ArtifactConsistencyValidator
+from app.services.chapter_goal_completion_checker import ChapterGoalCompletionChecker
+from app.services.encoding_health_checker import EncodingHealthChecker
 from app.services.environment_engine import EnvironmentEngine
 from app.services.event_log_service import EventLogService
 from app.services.memory_service import MemoryService
@@ -96,6 +99,7 @@ class SimulationRunner:
         run_manager.initialize()
 
         state = None
+        quality_report = None
         try:
             trace_service = TraceService(sim_dir) if mode == "llm" else None
             memory_service = MemoryService(sim_dir, world) if feature_flags["enable_memory"] else None
@@ -283,15 +287,134 @@ class SimulationRunner:
             except Exception as e:
                 self._log(f"[!] Quality evaluation failed: {e}")
 
+            validation_summary = self._run_p0_validation(
+                sim_dir=sim_dir,
+                world=world,
+                state=state,
+                final_events=final_events,
+                draft_faithfulness_report=result.get("draft_faithfulness_report"),
+                quality_report=quality_report,
+            )
+
             self._write_v2_report(sim_dir, v2_phase, feature_flags, mode, tick_limit, state.tick, state)
 
-            run_manager.complete(state)
+            run_manager.complete_with_validation(
+                state=state,
+                validation_status=validation_summary["validation_status"],
+                validation_errors=validation_summary["validation_errors"],
+                extra_metrics={"validation_summary": validation_summary},
+            )
             self._log(f"Simulation {simulation_id} finished at tick={state.tick}.")
             return RunResult(sim_dir=sim_dir, simulation_id=simulation_id)
 
         except Exception as e:
             run_manager.fail(e, state)
             raise
+
+    @staticmethod
+    def _run_p0_validation(
+        sim_dir: Path,
+        world: WorldConfig,
+        state,
+        final_events: list[EventLog],
+        draft_faithfulness_report: dict | None,
+        quality_report,
+    ) -> dict:
+        reports = {
+            "artifact_consistency": ArtifactConsistencyValidator(sim_dir).validate(),
+            "encoding_health": EncodingHealthChecker(sim_dir).check(),
+            "chapter_goal_completion": ChapterGoalCompletionChecker(world, sim_dir).evaluate(state, final_events),
+        }
+        if draft_faithfulness_report:
+            reports["draft_faithfulness"] = draft_faithfulness_report
+        quality_validation = SimulationRunner._quality_report_to_validation(quality_report)
+        if quality_validation:
+            reports["quality"] = quality_validation
+        summary = SimulationRunner._aggregate_validation_reports(reports)
+        with open(sim_dir / "validation_summary.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        return summary
+
+    @staticmethod
+    def _quality_report_to_validation(quality_report) -> dict | None:
+        if quality_report is None:
+            return None
+        issues = []
+        status = str(getattr(quality_report, "status", "") or "").lower()
+        rewrite_recommended = bool(getattr(quality_report, "rewrite_recommended", False))
+        rewrite_priority = str(getattr(quality_report, "rewrite_priority", "") or "").lower()
+        if status == "failed":
+            issues.append(
+                {
+                    "type": "QUALITY_FAILED",
+                    "severity": "high",
+                    "message": "Story quality evaluator reported failed status.",
+                    "details": {"status": status},
+                }
+            )
+        if rewrite_recommended:
+            issues.append(
+                {
+                    "type": "QUALITY_REWRITE_RECOMMENDED",
+                    "severity": "high" if rewrite_priority == "high" else "medium",
+                    "message": "Story quality evaluator recommends rewrite.",
+                    "details": {"rewrite_priority": rewrite_priority},
+                }
+            )
+        high_count = sum(1 for issue in issues if issue.get("severity") in {"high", "critical"})
+        medium_count = sum(1 for issue in issues if issue.get("severity") == "medium")
+        return {
+            "validator": "quality_report_adapter",
+            "status": "failed" if high_count else "warning" if medium_count else "passed",
+            "passed": high_count == 0,
+            "issue_count": len(issues),
+            "high_count": high_count,
+            "medium_count": medium_count,
+            "issues": issues,
+        }
+
+    @staticmethod
+    def _aggregate_validation_reports(reports: dict) -> dict:
+        errors = []
+        report_summaries = {}
+        for name, report in reports.items():
+            issues = report.get("issues") or []
+            if not issues and name == "chapter_goal_completion":
+                issues = [
+                    {
+                        "type": check.get("name"),
+                        "severity": check.get("severity"),
+                        "message": check.get("message"),
+                        "details": check.get("details"),
+                    }
+                    for check in report.get("checks") or []
+                    if not check.get("passed")
+                ]
+            report_summaries[name] = {
+                "status": report.get("status"),
+                "issue_count": len(issues),
+                "high_count": sum(1 for issue in issues if issue.get("severity") in {"high", "critical"}),
+                "medium_count": sum(1 for issue in issues if issue.get("severity") == "medium"),
+            }
+            for issue in issues:
+                errors.append({"source": name, **issue})
+        has_high = any(issue.get("severity") in {"high", "critical"} for issue in errors)
+        has_medium = any(issue.get("severity") == "medium" for issue in errors)
+        validation_status = "failed" if has_high else "warning" if has_medium or errors else "passed"
+        return {
+            "validation_status": validation_status,
+            "validation_errors": errors,
+            "issue_count": len(errors),
+            "high_count": sum(1 for issue in errors if issue.get("severity") in {"high", "critical"}),
+            "medium_count": sum(1 for issue in errors if issue.get("severity") == "medium"),
+            "reports": report_summaries,
+            "artifacts": {
+                "artifact_consistency": "artifact_consistency_report.json",
+                "encoding_health": "encoding_health_report.json",
+                "draft_faithfulness": "draft_faithfulness_report.json",
+                "chapter_goal_completion": "chapter_goal_completion_report.json",
+            },
+        }
 
     def _load_open_threads(self, world_id: str) -> list[dict]:
         thread_file = self.project_root / "worlds" / world_id / "open_threads.json"

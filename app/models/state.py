@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,48 @@ class RelationshipRuntimeState(BaseModel):
     hostility: int = 0
     affinity: int = 0
     last_changed_tick: int = 0
+    last_cause: str = ""
+    evidence: List[str] = Field(default_factory=list)
+
+
+class GoalRuntimeState(BaseModel):
+    goal_id: str
+    owner_agent_id: str
+    description: str
+    goal_type: Literal["short_term", "long_term", "secret", "relationship", "survival"] = "short_term"
+    status: Literal["active", "blocked", "advanced", "completed", "abandoned"] = "active"
+    priority: int = 0
+    progress: int = 0
+    blockers: List[str] = Field(default_factory=list)
+    related_fact_ids: List[str] = Field(default_factory=list)
+    related_agent_ids: List[str] = Field(default_factory=list)
+    last_updated_tick: int = 0
+    source: str = ""
+
+
+class KeyEventSignal(BaseModel):
+    signal_id: str
+    source_event_id: str = ""
+    source_interaction_id: str = ""
+    tick: int = 0
+    location_id: str = ""
+    event_kind: Literal[
+        "clue_discovered",
+        "fact_revealed",
+        "fact_suspected",
+        "relationship_shift",
+        "group_decision",
+        "danger_escalation",
+        "goal_conflict",
+    ]
+    actor_ids: List[str] = Field(default_factory=list)
+    visible_to: List[str] = Field(default_factory=list)
+    related_fact_ids: List[str] = Field(default_factory=list)
+    affected_agents: List[str] = Field(default_factory=list)
+    priority: int = 0
+    requires_discussion: bool = False
+    discussion_reason: str = ""
+    resolved_by_interaction_id: Optional[str] = None
 
 
 class FactExposureEntry(BaseModel):
@@ -57,6 +99,8 @@ class CharacterRuntimeState(BaseModel):
     emotional_state: str = ""
     hidden_status: str = "visible"
     last_intent_signature: Optional[str] = None
+    goals: Dict[str, GoalRuntimeState] = Field(default_factory=dict)
+    stance: Dict[str, str] = Field(default_factory=dict)
 
 
 class WorldRuntimeState(BaseModel):
@@ -66,6 +110,8 @@ class WorldRuntimeState(BaseModel):
     fact_exposure: Dict[str, FactExposureEntry] = Field(default_factory=dict)
     open_threads: List[str] = Field(default_factory=list)
     interaction_history: List[str] = Field(default_factory=list)
+    pending_key_events: List[KeyEventSignal] = Field(default_factory=list)
+    resolved_key_events: List[KeyEventSignal] = Field(default_factory=list)
 
 
 class WorldState(BaseModel):

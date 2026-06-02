@@ -383,6 +383,10 @@ class SaveWorldRequest(BaseModel):
     chapter_goal: Dict[str, Any] = {}
 
 
+class SaveCharactersRequest(BaseModel):
+    characters: List[Dict[str, Any]] = []
+
+
 class CompleteWorldRequest(BaseModel):
     user_seed: Optional[str] = None
     target_genre: str = "horror_suspense"
@@ -744,6 +748,34 @@ async def save_world(world_id: str, request: SaveWorldRequest):
             "success": True,
             "world_id": world_id,
             "message": "World draft saved",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/worlds/{world_id}/characters")
+async def save_world_characters(world_id: str, request: SaveCharactersRequest):
+    try:
+        world_dir = WORLDS_DIR / world_id
+        if not world_dir.exists():
+            raise HTTPException(status_code=404, detail="World not found")
+
+        characters = [
+            _normalize_character(character, index)
+            for index, character in enumerate(request.characters or [])
+            if isinstance(character, dict)
+        ]
+        with open(world_dir / "characters.json", "w", encoding="utf-8") as f:
+            json.dump({"characters": characters}, f, ensure_ascii=False, indent=2)
+
+        return {
+            "success": True,
+            "world_id": world_id,
+            "message": "Characters saved",
         }
     except HTTPException:
         raise

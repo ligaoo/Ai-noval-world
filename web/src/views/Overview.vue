@@ -528,7 +528,11 @@ const loadSelectedWorld = async () => {
     
     const worldData = await response.json()
     
+    worldStore.worldId = selectedWorldId.value
     worldStore.worldBible = worldData.world_bible || {}
+    if (!worldStore.worldBible.world_id) {
+      worldStore.worldBible.world_id = selectedWorldId.value
+    }
     worldStore.characters = worldData.characters?.characters || []
     worldStore.locations = worldData.map?.locations || []
     worldStore.clues = worldData.clues?.clues || []

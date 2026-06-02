@@ -87,6 +87,10 @@ class AgentPerception(BaseModel):
     beliefs: List[str] = Field(default_factory=list)
     recent_visible_events: List[str] = Field(default_factory=list)
     unavailable_information: List[str] = Field(default_factory=list)
+    relevant_memories: List[str] = Field(default_factory=list)
+    relationship_context: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    active_goals: List[str] = Field(default_factory=list)
+    stance_summary: List[str] = Field(default_factory=list)
 
 
 class SpeechSegment(BaseModel):
