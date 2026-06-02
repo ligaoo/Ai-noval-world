@@ -25,7 +25,17 @@
       "Bash(wmic:*)",
       "Bash(MSYS2_ARG_CONV_EXCL='*' cmd.exe:*)",
       "Bash(MSYS2_ARG_CONV_EXCL='*' cmd.exe /c \"netstat -ano | findstr :8421\")",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npm --prefix \"E:\\\\ai-noval-world\\\\web\" run build)",
+      "Bash(git -C \"E:\\\\ai-noval-world\" diff:*)",
+      "Bash(git -C \"E:\\\\ai-noval-world\" status:*)",
+      "Bash(pytest:*)",
+      "Bash(\"E:\\\\ai-noval-world\\\\.venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n添加P0验证阻断机制\nEOF\n\\)\")",
+      "Bash(git rev-parse:*)",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n维护P0验证流程文档\nEOF\n\\)\")"
     ]
   }
 }

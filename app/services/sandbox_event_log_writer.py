@@ -44,6 +44,9 @@ class SandboxEventLogWriter:
                 perceived_by=list(result.visible_to),
                 fact_exposure_delta={
                     "revealed_fact_ids": self._revealed_fact_ids(state, result),
+                    "suspected_fact_ids": self._suspected_fact_ids(state, result),
+                    "known_by": self._known_by_by_fact(state, result),
+                    "suspected_by": self._suspected_by_by_fact(state, result),
                     "revealed_count": len(result.revealed_facts),
                     "suspected_count": sum(len(v) for v in result.suspected_facts.values()),
                 },
@@ -109,12 +112,74 @@ class SandboxEventLogWriter:
     @staticmethod
     def _revealed_fact_ids(state: WorldState, result: InteractionResult) -> List[str]:
         fact_ids: List[str] = []
+        if result.exposure_update:
+            for item in result.exposure_update.revealed_facts:
+                fact_id = str(item.get("fact_id") or "")
+                if fact_id:
+                    fact_ids.append(fact_id)
         for fact in result.revealed_facts:
             for fact_id, entry in state.world.fact_exposure.items():
                 if fact == fact_id or fact == entry.truth:
                     fact_ids.append(fact_id)
                     break
-        return fact_ids
+        return list(dict.fromkeys(fact_ids))
+
+    @staticmethod
+    def _suspected_fact_ids(state: WorldState, result: InteractionResult) -> List[str]:
+        fact_ids: List[str] = []
+        if result.exposure_update:
+            for item in result.exposure_update.suspected_facts:
+                if item.get("status", "suspected") != "suspected":
+                    continue
+                fact_id = str(item.get("fact_id") or item.get("label") or "")
+                if fact_id:
+                    fact_ids.append(fact_id)
+        for fact in result.suspected_facts:
+            matched = None
+            for fact_id, entry in state.world.fact_exposure.items():
+                if fact == fact_id or fact == entry.public_label or fact == entry.truth:
+                    matched = fact_id
+                    break
+            fact_ids.append(matched or fact)
+        return list(dict.fromkeys(fact_ids))
+
+    @staticmethod
+    def _known_by_by_fact(state: WorldState, result: InteractionResult) -> dict:
+        known_by: dict[str, List[str]] = {}
+        if result.exposure_update:
+            for item in result.exposure_update.revealed_facts:
+                fact_id = str(item.get("fact_id") or "")
+                if fact_id:
+                    known_by[fact_id] = [str(agent_id) for agent_id in item.get("known_by", [])]
+        for fact_id in SandboxEventLogWriter._revealed_fact_ids(state, result):
+            known_by.setdefault(fact_id, list(result.visible_to))
+        return known_by
+
+    @staticmethod
+    def _suspected_by_by_fact(state: WorldState, result: InteractionResult) -> dict:
+        suspected_by: dict[str, dict[str, float]] = {}
+        if result.exposure_update:
+            for item in result.exposure_update.suspected_facts:
+                if item.get("status", "suspected") != "suspected":
+                    continue
+                fact_id = str(item.get("fact_id") or item.get("label") or "")
+                if not fact_id:
+                    continue
+                confidence = float(item.get("confidence", 0.5))
+                suspected_by.setdefault(fact_id, {})
+                for agent_id in item.get("suspected_by", []):
+                    suspected_by[fact_id][str(agent_id)] = confidence
+        for fact, agents in result.suspected_facts.items():
+            matched = None
+            for fact_id, entry in state.world.fact_exposure.items():
+                if fact == fact_id or fact == entry.public_label or fact == entry.truth:
+                    matched = fact_id
+                    break
+            fact_id = matched or fact
+            suspected_by.setdefault(fact_id, {})
+            for agent_id, confidence in agents.items():
+                suspected_by[fact_id][str(agent_id)] = float(confidence)
+        return suspected_by
 
     def _source_summary(self, result: InteractionResult) -> dict:
         character_ids = sorted(set(result.participants + result.observers + result.visible_to))

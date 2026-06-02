@@ -35,6 +35,7 @@ class KeyEventDetector:
             event_type="interaction",
             result=result.topic or result.interaction_type,
             visible_to=list(result.visible_to),
+            perceived_by=list(result.visible_to),
             discovered_facts=[],
             plot_value={"relationship": len(result.relationship_changes), "conflict": len(result.relationship_changes)},
             interaction_id=result.interaction_id,
@@ -43,6 +44,7 @@ class KeyEventDetector:
                 "revealed_count": len(result.revealed_facts),
                 "suspected_count": sum(len(v) for v in result.suspected_facts.values()),
                 "revealed_fact_ids": list(result.revealed_facts),
+                "suspected_fact_ids": list(result.suspected_facts.keys()),
             },
             source_interaction={"group_decision": result.group_decision.model_dump(mode="json") if result.group_decision else None},
         )

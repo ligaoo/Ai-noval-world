@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from app.models.event import EventLog
 from app.models.memory import Memory, MemoryChunk, MemoryType
@@ -50,124 +49,139 @@ class MemoryService:
     # ==========================================
 
     def write_from_event(self, event: EventLog, state: WorldState) -> Optional[Memory]:
-        """从事件自动写入记忆"""
-        if event.discovered_facts:
-            return self._write_fact_memory_from_event(event, state)
+        """从事件自动写入记忆，兼容旧入口：返回第一条写入的记忆。"""
+        memories = self.write_many_from_event(event, state)
+        return memories[0] if memories else None
 
-        # 1. plot_event / soft_hint → event_memory
+    def write_many_from_event(self, event: EventLog, state: WorldState) -> List[Memory]:
+        """从事件自动写入多角色隔离记忆。"""
+        memories: List[Memory] = []
+
+        fact_ids = self._fact_ids_from_event(event)
+        if fact_ids:
+            memories.extend(self._write_fact_memories_from_event(event, state))
+
         if event.event_level == "plot" or event.event_type == "soft_hint":
-            return self._write_event_memory(event)
+            memories.extend(self._write_event_memories(event))
 
-        # 2. 线索发现 → fact_memory
         if event.action and event.action.action_type in ["inspect", "search", "ask", "talk"]:
             if "发现" in event.result or "线索" in event.result:
-                return self._write_fact_memory_from_event(event, state)
+                memories.extend(self._write_fact_memories_from_event(event, state))
 
-        # 3. 对话失败/含糊 → belief_memory
-        if event.event_type == "action_result" and event.action and event.action.action_type in ["ask", "talk"]:
-            if "含糊" in event.result or "没有透露" in event.result or "回避" in event.result:
-                return self._write_belief_memory_from_event(event, state)
+        memories.extend(self._write_belief_memories_from_event(event, state))
+        return memories
 
-        return None
-
-    def _write_event_memory(self, event: EventLog) -> Memory:
-        """写入事件记忆：记录经历过的事"""
-        memory_id = f"mem_evt_{len(self._memories):04d}"
-        tags = self._extract_tags_from_event(event)
-
-        mem = Memory(
-            memory_id=memory_id,
-            agent_id=event.actors[0] if event.actors else "",
-            type=MemoryType.EVENT,
-            time=event.time,
-            location_id=event.location_id,
-            content=event.result,
-            tags=tags,
-            confidence=1.0,  # event 是确定发生的
-            importance=self._calc_importance(event),
-            source_event_id=event.event_id,
-        )
-        self._save_memory(mem)
-        return mem
-
-    def _write_fact_memory_from_event(self, event: EventLog, state: WorldState) -> Optional[Memory]:
-        """写入事实记忆：确认的线索"""
-        if not event.actors:
-            return None
-
-        clue_ids = event.discovered_facts or [
-            clue_id for clue_id, discovered in state.world.discovered_facts.items() if discovered
-        ]
-        for clue_id in clue_ids:
-            existing = [
-                m for m in self._memories
-                if m.agent_id == event.actors[0]
-                and m.type == MemoryType.FACT
-                and clue_id in m.tags
-            ]
-            if existing:
+    def _write_event_memories(self, event: EventLog) -> List[Memory]:
+        """写入事件记忆：给实际感知事件的角色各写一条。"""
+        memories: List[Memory] = []
+        for agent_id in self._event_memory_recipients(event):
+            if self._memory_exists(agent_id=agent_id, memory_type=MemoryType.EVENT, source_event_id=event.event_id):
                 continue
-
-            clue = self._get_clue_by_id(clue_id)
-            if not clue:
-                continue
-
-            memory_id = f"mem_fact_{len(self._memories):04d}"
-            tags = ["fact", clue_id] + self._extract_tags_from_event(event)
-
             mem = Memory(
-                memory_id=memory_id,
-                agent_id=event.actors[0],
-                type=MemoryType.FACT,
+                memory_id=self._build_memory_id("evt"),
+                agent_id=agent_id,
+                type=MemoryType.EVENT,
                 time=event.time,
                 location_id=event.location_id,
-                content=f"确认事实：{clue.content}",
-                tags=tags,
-                confidence=0.95,
-                importance=clue.importance,
+                content=event.result,
+                tags=self._extract_tags_from_event(event),
+                confidence=1.0,
+                importance=self._calc_importance(event),
                 source_event_id=event.event_id,
             )
             self._save_memory(mem)
-            return mem
+            memories.append(mem)
+        return memories
 
-        return None
+    def _event_memory_recipients(self, event: EventLog) -> List[str]:
+        if event.perceived_by:
+            return self._valid_agent_ids(event.perceived_by)
+        if event.visible_to:
+            return self._valid_agent_ids(event.visible_to)
+        return self._valid_agent_ids(event.actors)
 
-    def _write_belief_memory_from_event(self, event: EventLog, state: WorldState) -> Optional[Memory]:
-        """写入信念/推测记忆：对话含糊时产生的怀疑"""
-        if not event.actors:
-            return None
+    def _write_fact_memories_from_event(self, event: EventLog, state: WorldState) -> List[Memory]:
+        """写入事实记忆：只给真正知道该事实的角色。"""
+        memories: List[Memory] = []
+        for fact_id in self._fact_ids_from_event(event):
+            clue = self._get_clue_by_id(fact_id)
+            entry = state.world.fact_exposure.get(fact_id)
+            if not clue and not entry:
+                continue
 
-        agent_id = event.actors[0]
-        target = event.action.target if event.action else "unknown"
+            recipients = self._known_fact_recipients(state, fact_id, event)
+            for agent_id in recipients:
+                if self._memory_exists(agent_id=agent_id, memory_type=MemoryType.FACT, tag=fact_id):
+                    continue
+                content_source = entry.truth if entry else clue.content
+                importance = clue.importance if clue else self._calc_importance(event)
+                tags = ["fact", fact_id] + self._extract_tags_from_event(event)
+                mem = Memory(
+                    memory_id=self._build_memory_id("fact"),
+                    agent_id=agent_id,
+                    type=MemoryType.FACT,
+                    time=event.time,
+                    location_id=event.location_id,
+                    content=f"确认事实：{content_source}",
+                    tags=list(dict.fromkeys(tags)),
+                    confidence=0.95,
+                    importance=importance,
+                    source_event_id=event.event_id,
+                )
+                self._save_memory(mem)
+                memories.append(mem)
+        return memories
 
-        # 检查是否已有类似 belief
-        content_suffix = f"{target} 在隐瞒什么"
-        existing = [
-            m for m in self._memories
-            if m.agent_id == agent_id
-            and m.type == MemoryType.BELIEF
-            and content_suffix in m.content
-        ]
-        if existing:
-            return None
+    def _write_belief_memories_from_event(self, event: EventLog, state: WorldState) -> List[Memory]:
+        """写入信念/推测记忆：只给真正产生怀疑的角色。"""
+        memories: List[Memory] = []
+        for fact_id in self._suspected_fact_ids_from_event(event, state):
+            entry = state.world.fact_exposure.get(fact_id)
+            label = (entry.public_label if entry else "") or fact_id
+            known_by = set(entry.known_by if entry else [])
+            suspected_by = self._suspected_fact_recipients(state, fact_id, event)
+            for agent_id, confidence in suspected_by.items():
+                if agent_id in known_by:
+                    continue
+                if self._memory_exists(agent_id=agent_id, memory_type=MemoryType.BELIEF, tag=fact_id):
+                    continue
+                tags = ["belief", "suspicion", fact_id, label] + self._extract_tags_from_event(event)
+                mem = Memory(
+                    memory_id=self._build_memory_id("belief"),
+                    agent_id=agent_id,
+                    type=MemoryType.BELIEF,
+                    time=event.time,
+                    location_id=event.location_id,
+                    content=f"推测：{label} 可能与当前事件有关",
+                    tags=list(dict.fromkeys(tags)),
+                    confidence=confidence,
+                    importance=5,
+                    source_event_id=event.event_id,
+                )
+                self._save_memory(mem)
+                memories.append(mem)
 
-        memory_id = f"mem_belief_{len(self._memories):04d}"
-        tags = ["belief", "suspicion", target]
-
-        mem = Memory(
-            memory_id=memory_id,
-            agent_id=agent_id,
-            type=MemoryType.BELIEF,
-            time=event.time,
-            location_id=event.location_id,
-            content=f"推测：{target} 可能在隐瞒什么",
-            tags=tags,
-            confidence=0.6,  # belief 置信度较低
-            importance=5,
-            source_event_id=event.event_id,
-        )
-        self._save_memory(mem)
-        return mem
+        if self._is_legacy_ambiguous_dialogue(event):
+            target = event.action.target if event.action else "unknown"
+            content_suffix = f"{target} 可能在隐瞒什么"
+            for agent_id in self._legacy_belief_recipients(event):
+                if self._memory_exists(agent_id=agent_id, memory_type=MemoryType.BELIEF, content_contains=content_suffix):
+                    continue
+                mem = Memory(
+                    memory_id=self._build_memory_id("belief"),
+                    agent_id=agent_id,
+                    type=MemoryType.BELIEF,
+                    time=event.time,
+                    location_id=event.location_id,
+                    content=f"推测：{content_suffix}",
+                    tags=["belief", "suspicion", target],
+                    confidence=0.6,
+                    importance=5,
+                    source_event_id=event.event_id,
+                )
+                self._save_memory(mem)
+                memories.append(mem)
+        return memories
 
     # ==========================================
     # 检索策略（基于 tags + importance + recency）
@@ -259,17 +273,14 @@ class MemoryService:
         if existing:
             return existing[0]
 
-        memory_id = f"mem_belief_{len(self._memories):04d}"
-        tags = ["belief", "reflection", "from_v3_arc"]
-
         mem = Memory(
-            memory_id=memory_id,
+            memory_id=self._build_memory_id("belief"),
             agent_id=agent_id,
             type=MemoryType.BELIEF,
             time="",  # 从调用处获取 time
             location_id="",
             content=content,
-            tags=tags,
+            tags=["belief", "reflection", "from_v3_arc"],
             confidence=confidence,
             importance=6,
             source_event_id="",
@@ -278,17 +289,23 @@ class MemoryService:
         return mem
 
     def get_all_tags_for_state(self, state: WorldState, agent_id: str) -> List[str]:
-        """从当前状态提取检索用的 tags"""
+        """从当前状态提取检索用的 tags，限定为角色视角。"""
         agent_state = state.characters[agent_id]
         loc = self.world.map.get_location(agent_state.location_id)
 
         tags: List[str] = []
-        tags.append(agent_state.location_id)  # 当前地点
-        tags.extend([o.id for o in loc.objects])  # 可见对象
-        tags.extend(list(state.world.discovered_facts.keys()))  # 已发现线索
-        tags.extend(list(agent_state.known_facts))  # 已知事实
+        tags.append(agent_state.location_id)
+        tags.extend([o.id for o in loc.objects])
+        tags.extend(list(agent_state.known_facts))
+        for fact_id, entry in state.world.fact_exposure.items():
+            if agent_id in entry.known_by:
+                tags.append(fact_id)
+            if agent_id in entry.suspected_by:
+                tags.append(fact_id)
+                if entry.public_label:
+                    tags.append(entry.public_label)
 
-        return list(set(tags))
+        return list(dict.fromkeys(tag for tag in tags if tag))
 
     def _extract_tags_from_event(self, event: EventLog) -> List[str]:
         """从事件提取 tags"""
@@ -301,7 +318,7 @@ class MemoryService:
                 tags.append(event.action.topic)
         if event.actors:
             tags.extend(event.actors)
-        return list(set(tags))
+        return list(dict.fromkeys(tag for tag in tags if tag))
 
     def _calc_importance(self, event: EventLog) -> int:
         """根据事件 plot_value 计算重要性"""
@@ -319,6 +336,126 @@ class MemoryService:
             if clue.id == clue_id:
                 return clue
         return None
+
+    def _valid_agent_ids(self, agent_ids: List[str]) -> List[str]:
+        valid_ids = set(self.world.characters.ids())
+        result: List[str] = []
+        for agent_id in agent_ids:
+            if not agent_id or agent_id not in valid_ids or agent_id in result:
+                continue
+            result.append(agent_id)
+        return result
+
+    def _memory_exists(
+        self,
+        agent_id: str,
+        memory_type: MemoryType,
+        source_event_id: Optional[str] = None,
+        tag: Optional[str] = None,
+        content_contains: Optional[str] = None,
+    ) -> bool:
+        for memory in self._memories:
+            if memory.agent_id != agent_id or memory.type != memory_type:
+                continue
+            if source_event_id is not None and memory.source_event_id != source_event_id:
+                continue
+            if tag is not None and tag not in memory.tags:
+                continue
+            if content_contains is not None and content_contains not in memory.content:
+                continue
+            return True
+        return False
+
+    def _build_memory_id(self, prefix: str) -> str:
+        return f"mem_{prefix}_{len(self._memories):04d}"
+
+    def _fact_ids_from_event(self, event: EventLog) -> List[str]:
+        fact_ids: List[str] = []
+        fact_ids.extend(str(fact_id) for fact_id in event.discovered_facts if fact_id)
+        revealed = event.fact_exposure_delta.get("revealed_fact_ids", []) or []
+        if isinstance(revealed, list):
+            fact_ids.extend(str(fact_id) for fact_id in revealed if fact_id)
+        return list(dict.fromkeys(fact_ids))
+
+    def _known_fact_recipients(self, state: WorldState, fact_id: str, event: EventLog) -> List[str]:
+        entry = state.world.fact_exposure.get(fact_id)
+        if entry and entry.known_by:
+            return self._valid_agent_ids(list(entry.known_by))
+
+        delta_known_by = event.fact_exposure_delta.get("known_by", {}) or {}
+        if isinstance(delta_known_by, dict):
+            recipients = delta_known_by.get(fact_id, []) or []
+            if isinstance(recipients, list) and recipients:
+                return self._valid_agent_ids([str(agent_id) for agent_id in recipients])
+
+        clue = self._get_clue_by_id(fact_id)
+        clue_content = clue.content if clue else ""
+        recipients: List[str] = []
+        for agent_id, runtime in state.characters.items():
+            known_facts = set(runtime.known_facts)
+            if fact_id in known_facts or (clue_content and clue_content in known_facts):
+                recipients.append(agent_id)
+        if recipients:
+            return self._valid_agent_ids(recipients)
+
+        fallback = event.action.agent_id if event.action else None
+        if fallback:
+            return self._valid_agent_ids([fallback])
+        return self._valid_agent_ids(event.actors[:1])
+
+    def _suspected_fact_ids_from_event(self, event: EventLog, state: WorldState) -> List[str]:
+        fact_ids: List[str] = []
+        suspected = event.fact_exposure_delta.get("suspected_fact_ids", []) or []
+        if isinstance(suspected, list):
+            fact_ids.extend(str(fact_id) for fact_id in suspected if fact_id)
+        suspected_by = event.fact_exposure_delta.get("suspected_by", {}) or {}
+        if isinstance(suspected_by, dict):
+            fact_ids.extend(str(fact_id) for fact_id in suspected_by.keys() if fact_id)
+        fact_ids.extend(self._fact_ids_from_event(event))
+
+        if not fact_ids:
+            fact_ids.extend(
+                fact_id
+                for fact_id, entry in state.world.fact_exposure.items()
+                if entry.suspected_by
+            )
+        return list(dict.fromkeys(fact_ids))
+
+    def _suspected_fact_recipients(self, state: WorldState, fact_id: str, event: EventLog) -> Dict[str, float]:
+        entry = state.world.fact_exposure.get(fact_id)
+        recipients: Dict[str, float] = {}
+        if entry:
+            recipients.update({agent_id: float(confidence) for agent_id, confidence in entry.suspected_by.items()})
+        delta_suspected_by = event.fact_exposure_delta.get("suspected_by", {}) or {}
+        if isinstance(delta_suspected_by, dict):
+            fact_recipients = delta_suspected_by.get(fact_id, {}) or {}
+            if isinstance(fact_recipients, dict):
+                for agent_id, confidence in fact_recipients.items():
+                    recipients[str(agent_id)] = float(confidence)
+            elif isinstance(fact_recipients, list):
+                for agent_id in fact_recipients:
+                    recipients[str(agent_id)] = 0.5
+        return {
+            agent_id: confidence
+            for agent_id, confidence in recipients.items()
+            if agent_id in self._valid_agent_ids([agent_id])
+        }
+
+    def _is_legacy_ambiguous_dialogue(self, event: EventLog) -> bool:
+        if event.event_type != "action_result" or not event.action:
+            return False
+        if event.action.action_type not in ["ask", "talk"]:
+            return False
+        return "含糊" in event.result or "没有透露" in event.result or "回避" in event.result
+
+    def _legacy_belief_recipients(self, event: EventLog) -> List[str]:
+        if event.perceived_by:
+            return self._valid_agent_ids(event.perceived_by)
+        if event.visible_to:
+            return self._valid_agent_ids(event.visible_to)
+        if event.action and event.action.agent_id:
+            return self._valid_agent_ids([event.action.agent_id])
+        return self._valid_agent_ids(event.actors[:1])
 
     def get_summary(self) -> Dict[str, int]:
         """获取记忆统计"""
