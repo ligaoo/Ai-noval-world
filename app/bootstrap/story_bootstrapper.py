@@ -139,6 +139,12 @@ class StoryBootstrapper:
         bible.setdefault("world_id", result.world_id)
         bible.setdefault("rules", [])
         bible.setdefault("themes", [])
+        bible.setdefault("core_motif", bible.get("core_motif") or (bible.get("themes") or [""])[0] if bible.get("themes") else "异常")
+        bible.setdefault("main_question", bible.get("main_question") or result.chapter_goal.get("goal", "本章需要确认什么异常正在发生？"))
+        bible.setdefault("hidden_truth", bible.get("hidden_truth") or "隐藏真相不能在第一章直接确认。")
+        bible.setdefault("first_volume_goal", bible.get("first_volume_goal") or result.chapter_goal.get("goal", "逐步推进主线。"))
+        bible.setdefault("ending_direction", bible.get("ending_direction") or "通过多章线索逐步逼近真相。")
+        bible.setdefault("forbidden_early_reveals", bible.get("forbidden_early_reveals") or ["隐藏行动者身份", "最终真相"])
         bible.pop("draft", None)
         bible.pop("draft_reason", None)
         with open(world_dir / "world_bible.json", "w", encoding="utf-8") as f:
@@ -202,6 +208,10 @@ class StoryBootstrapper:
                     ],
                     "connected_to": loc.connected_to,
                     "danger_level": loc.danger_level,
+                    "narrative_function": loc.type,
+                    "information_gap": f"{loc.name}保留了需要通过行动验证的信息差。",
+                    "suitable_conflicts": ["观察误判", "线索解释分歧"],
+                    "forbidden_events": ["直接揭示最终真相"],
                 }
                 for loc in result.map
             ]

@@ -230,6 +230,28 @@ class RunManagerLite:
 
         llm_summary = self._read_json(self.sim_dir / "llm_summary.json") or {}
         validation_summary = self._read_json(self.sim_dir / "validation_summary.json") or {}
+        agent_error_files = sorted(path.name for path in self.sim_dir.glob("agent_error_tick*.json"))
+        llm_trace_rows = self._read_jsonl(self.sim_dir / "llm_traces.jsonl")
+        failed_trace_rows = sum(1 for row in llm_trace_rows if not row.get("success", True))
+        trace_total_retries = sum(int(row.get("retry_count") or 0) for row in llm_trace_rows)
+        trace_agent_decision_failures = sum(
+            1
+            for row in llm_trace_rows
+            if row.get("purpose") == "agent_decision" and not row.get("success", True)
+        )
+        fallback_actions = extra.get("fallback_actions")
+        if fallback_actions is None:
+            fallback_actions = len(agent_error_files)
+        agent_decision_failures = extra.get("agent_decision_failures")
+        if agent_decision_failures is None:
+            agent_decision_failures = trace_agent_decision_failures
+        llm_metrics = {
+            **llm_summary,
+            "total_retries": llm_summary.get("total_retries", trace_total_retries),
+            "agent_decision_failures": llm_summary.get("agent_decision_failures", agent_decision_failures),
+            "failed_trace_rows": failed_trace_rows,
+            "agent_error_files": agent_error_files,
+        }
 
         return {
             "simulation_id": self.sim_dir.name,
@@ -240,7 +262,8 @@ class RunManagerLite:
                 "plot_events": len(plot_events),
                 "chapters": 1 if (self.sim_dir / "chapter_draft.md").exists() else 0,
                 "failed_actions": len(invalid_actions),
-                "fallback_actions": extra.get("fallback_actions", 0),
+                "fallback_actions": fallback_actions,
+                "agent_decision_failures": agent_decision_failures,
             },
             "agent": {
                 "repeat_action_count": repeat_action_count,
@@ -261,7 +284,7 @@ class RunManagerLite:
             "memory": {
                 "total_memories": len(memories),
             },
-            "llm": llm_summary,
+            "llm": llm_metrics,
             "validation": {
                 "status": extra.get("validation_status") or validation_summary.get("validation_status") or "unknown",
                 "error_count": len(extra.get("validation_errors") or validation_summary.get("validation_errors") or []),
@@ -281,6 +304,12 @@ class RunManagerLite:
         director = metrics["director"]
         plot = metrics["plot"]
         validation = metrics.get("validation") or {}
+        llm = metrics.get("llm") or {}
+        fallback_actions = int(runtime.get("fallback_actions") or 0)
+        agent_decision_failures = int(runtime.get("agent_decision_failures") or llm.get("agent_decision_failures") or 0)
+        total_retries = int(llm.get("total_retries") or 0)
+        failed_trace_rows = int(llm.get("failed_trace_rows") or 0)
+        agent_error_files = llm.get("agent_error_files") or []
 
         issues = []
         suggestions = []
@@ -302,6 +331,15 @@ class RunManagerLite:
         elif validation.get("status") == "warning":
             issues.append(f"验证警告：{validation.get('error_count', 0)} 个非阻断或中低风险问题。")
             suggestions.append("查看 validation_summary.json 和各验证报告确认是否需要修复。")
+        if fallback_actions > 0:
+            issues.append(f"Agent 触发兜底动作：{fallback_actions} 次。")
+            suggestions.append("查看 agent_error_tick*.json 和 llm_traces.jsonl，修正 LLM target/action 输出约束。")
+        if agent_decision_failures > 0:
+            issues.append(f"Agent 最终决策失败：{agent_decision_failures} 次。")
+            suggestions.append("检查失败 trace 的 error 字段，重点关注 target 合法性和 JSON 结构。")
+        if total_retries > 0:
+            issues.append(f"LLM 决策或生成发生 retry：{total_retries} 次。")
+            suggestions.append("查看 llm_summary.json 和 llm_traces.jsonl，降低无效输出或接口失败重试。")
 
         if not issues:
             issues.append("未发现明显阻塞问题。")
@@ -315,13 +353,24 @@ class RunManagerLite:
             (
                 f"本次运行 {runtime['total_ticks']}/{runtime['tick_limit']} ticks，"
                 f"记录 {runtime['total_events']} 个事件，"
-                f"发现 {clues['discovered_clues']}/{clues['total_clues']} 个线索。"
+                f"发现 {clues['discovered_clues']}/{clues['total_clues']} 个线索，"
+                f"fallback {fallback_actions} 次，retry {total_retries} 次，"
+                f"agent 决策失败 {agent_decision_failures} 次。"
             ),
             "",
             "## Issues",
             "",
         ]
         lines.extend(f"{i + 1}. {issue}" for i, issue in enumerate(issues))
+        lines.extend(["", "## LLM / Fallback", ""])
+        lines.append(f"- fallback_actions: {fallback_actions}")
+        lines.append(f"- agent_decision_failures: {agent_decision_failures}")
+        lines.append(f"- total_retries: {total_retries}")
+        lines.append(f"- failed_trace_rows: {failed_trace_rows}")
+        lines.append(f"- agent_error_files: {len(agent_error_files)}")
+        if agent_error_files:
+            for name in agent_error_files[:5]:
+                lines.append(f"  - {name}")
         lines.extend(["", "## Validation", ""])
         validation_status = validation.get("status") or "unknown"
         lines.append(f"- status: {validation_status}")

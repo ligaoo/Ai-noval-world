@@ -43,45 +43,45 @@ class PlotArcService:
         self.plot_arc_state = PlotArcState(active_arc=active_arc)
 
     def _create_default_arc(self) -> None:
-        """创建通用默认剧情弧"""
+        """创建默认的医院真相剧情弧"""
         default_stages = [
             StageConfig(
                 stage_id="setup",
                 name="建立异常",
-                purpose="建立核心地点的异常状态和第一组可验证线索",
-                required_events=["发现近期改动痕迹"],
+                purpose="建立医院并非完全废弃的认知",
+                required_events=["发现医院锁被更换过"],
                 allowed_clue_levels=["surface", "minor"],
-                forbidden_revelations=["final_truth", "hidden_actor_identity"],
+                forbidden_revelations=["ten_years_truth", "real_killer_identity"],
             ),
             StageConfig(
                 stage_id="investigation",
                 name="调查线索",
-                purpose="收集能互相印证的证据并推进主要悬念",
-                required_events=["发现未知行动痕迹", "获得可验证事实"],
+                purpose="收集旧案相关证据",
+                required_events=["发现旧档案记录", "看门人露出破绽"],
                 allowed_clue_levels=["surface", "minor", "medium"],
-                forbidden_revelations=["hidden_actor_identity"],
+                forbidden_revelations=["real_killer_identity"],
             ),
             StageConfig(
                 stage_id="confrontation",
                 name="冲突阶段",
-                purpose="让角色目标与隐藏阻力发生正面冲突",
-                required_events=["隐藏行动者造成新的阻碍"],
+                purpose="与隐瞒者产生正面冲突",
+                required_events=["看门人承认有人让他封锁医院"],
                 allowed_clue_levels=["surface", "minor", "medium", "major"],
                 forbidden_revelations=[],
             ),
             StageConfig(
                 stage_id="revelation",
                 name="真相揭露",
-                purpose="揭露核心异常的因果和最终选择",
-                required_events=["确认核心异常规则"],
+                purpose="揭露部分真相",
+                required_events=["主角发现自己十年前来过医院"],
                 allowed_clue_levels=["surface", "minor", "medium", "major", "truth"],
                 forbidden_revelations=[],
             ),
         ]
 
         default_arc = PlotArc(
-            arc_id="arc_main_truth",
-            name="主线真相篇",
+            arc_id="arc_hospital_truth",
+            name="旧医院真相篇",
             status="active",
             current_stage="setup",
             progress=0,
@@ -107,16 +107,16 @@ class PlotArcService:
         """返回线索被阶段锁定时的模糊提示"""
         level_messages = {
             "medium": [
-                "你注意到某些细节彼此呼应，但当前证据还不足以支撑明确判断。",
-                "线索已经出现轮廓，但还需要更多条件才能确认它的真正含义。",
+                "你注意到档案袋上似乎有熟悉的痕迹，但灰尘和光线让你无法确认。",
+                "这份文件内容有些模糊，你觉得需要更仔细的条件才能辨认。",
             ],
             "major": [
-                "这里显然牵动主线，但当前阶段还缺少能承接它的关键事实。",
-                "这条线索的重量超过了目前掌握的信息，贸然推进只会造成误判。",
+                "这里藏着什么重要的东西，但现在你的状态让你无法集中注意力。",
+                "档案的内容太沉重了，现在还不是面对它的时候。",
             ],
             "truth": [
-                "最终答案已经接近，但当前事件链还没有完成必要铺垫。",
-                "这条信息会改变全部判断，但现在还不是揭开它的时候。",
+                "有一个真相就在眼前，但你的潜意识在抗拒它。",
+                "这份记录牵扯到你不想触碰的过去，你下意识把它放回去了。",
             ],
         }
 

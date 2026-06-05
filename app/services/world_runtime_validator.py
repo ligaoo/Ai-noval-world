@@ -40,6 +40,7 @@ class RuntimeWorldValidator:
         self._validate_clues(world, issues)
         self._validate_chapter_goal(world, issues)
         self._validate_placeholders(world, issues)
+        self._validate_v1_1_input_density(world, warnings)
 
         return RuntimeWorldValidationResult(
             passed=not issues,
@@ -191,6 +192,31 @@ class RuntimeWorldValidator:
         )
         if placeholders:
             issues.append(f"检测到测试/占位内容，不能作为正式世界启动：{', '.join(placeholders)}。")
+
+    def _validate_v1_1_input_density(self, world: WorldConfig, warnings: list[str]) -> None:
+        bible = world.bible
+        if not bible.main_question:
+            warnings.append("正式版V1.1 建议 world_bible.main_question：用于生成 chapter_brief 主问题。")
+        if not bible.core_motif:
+            warnings.append("正式版V1.1 建议 world_bible.core_motif：用于稳定章节母题。")
+        if not bible.hidden_truth:
+            warnings.append("正式版V1.1 建议 world_bible.hidden_truth：用于控制禁止提前揭示的信息。")
+
+        pov_id = world.chapter_goal.pov
+        try:
+            pov = world.characters.get_character(pov_id)
+            if not pov.private_motive and not pov.personal_stakes:
+                warnings.append(f"正式版V1.1 建议 POV 角色 {pov_id} 配置 private_motive 或 personal_stakes。")
+        except KeyError:
+            pass
+
+        narrative_location_count = sum(1 for loc in world.map.locations if loc.narrative_function or loc.information_gap)
+        if narrative_location_count < 3:
+            warnings.append(f"正式版V1.1 建议至少 3 个地点配置 narrative_function 或 information_gap，当前 {narrative_location_count} 个。")
+
+        threaded_clue_count = sum(1 for clue in world.clues.clues if getattr(clue, "related_thread", None))
+        if threaded_clue_count < 3:
+            warnings.append(f"正式版V1.1 建议至少 3 条线索配置 related_thread，当前 {threaded_clue_count} 条。")
 
     def _add_placeholder_values(self, values: Set[str], value) -> None:
         if isinstance(value, str):

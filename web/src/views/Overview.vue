@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿﻿﻿<template>
   <div style="max-width: 1200px; margin: 0 auto;">
     <!-- 页面标题 -->
     <div style="margin-bottom: 32px; display: flex; align-items: center; justify-content: space-between;">
@@ -23,7 +23,37 @@
       </div>
     </div>
     <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #d1fae5;">
-      当前默认运行链路：`开 move` · `开记忆` · `开 LLM 叙事改写` · `开一致性检查+修订`（`llm + v2.4 Agent Sandbox`）
+      当前默认运行链路：正式版V1（`开 move` · `开记忆` · `开 LLM 叙事改写` · `开一致性检查+修订`）
+    </div>
+
+    <div style="background: rgba(42, 45, 53, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+      <div>
+        <label style="font-size: 13px; color: #9ca3af; display: block; margin-bottom: 6px;">章节风格</label>
+        <select v-model="qualityStyleFocus" multiple style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px; min-height: 88px;">
+          <option value="悬疑推进">悬疑推进</option>
+          <option value="恐怖氛围">恐怖氛围</option>
+          <option value="角色冲突">角色冲突</option>
+          <option value="线索密集">线索密集</option>
+          <option value="慢热铺垫">慢热铺垫</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 13px; color: #9ca3af; display: block; margin-bottom: 6px;">生成强度</label>
+        <select v-model="generationStrength" style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px;">
+          <option value="保守">保守：更忠实事件</option>
+          <option value="平衡">平衡：忠实 + 文学化</option>
+          <option value="强化">强化：更重成稿质感</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 13px; color: #9ca3af; display: block; margin-bottom: 6px;">结尾类型</label>
+        <select v-model="endingHookType" style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px;">
+          <option value="感官钩子">感官钩子</option>
+          <option value="线索钩子">线索钩子</option>
+          <option value="关系钩子">关系钩子</option>
+          <option value="危险钩子">危险钩子</option>
+        </select>
+      </div>
     </div>
 
     <!-- 世界选择器 -->
@@ -699,6 +729,9 @@ const goTo = (path) => {
 
 const isSimulating = ref(false)
 const simulationResult = ref(null)
+const qualityStyleFocus = ref(['悬疑推进', '恐怖氛围'])
+const generationStrength = ref('平衡')
+const endingHookType = ref('线索钩子')
 
 const saveCurrentWorldDraft = async () => {
   const currentWorldId = selectedWorldId.value || worldBible.value.world_id
@@ -825,11 +858,17 @@ const startSimulation = async () => {
       body: JSON.stringify({
         world_id: currentWorldId,
         mode: 'llm',
-        v2_phase: 'v2.4',
+        version: '正式版V1',
         seed: 12345,
         genre_id: 'horror',
         target_chapters: 10,
-        chapter_no: 1
+        chapter_no: 1,
+        quality_controls: {
+          style_focus: qualityStyleFocus.value,
+          generation_strength: generationStrength.value,
+          ending_hook_type: endingHookType.value,
+          rewrite_policy: 'auto_once'
+        }
       })
     })
 
@@ -860,7 +899,7 @@ const startSimulation = async () => {
 
         if (status.status === 'completed') {
           simulationResult.value = status
-          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: ${status.runtime_mode || 'llm'} / ${status.runtime_phase || 'v2.4'}`)
+          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: ${status.runtime_mode || 'llm'} / ${status.runtime_version || '正式版V1'}`)
           break
         } else if (status.status === 'failed') {
           throw new Error(status.error || '模拟运行失败')

@@ -1,6 +1,6 @@
 # V1 整体开发文档：主流程、LLM 调用与关键参数
 
-> 依据当前代码工作区整理。当前 CLI/API 正式运行路径实际标记为 `v2.4`，但 Story Bootstrap API 注释中仍称为“V1 自动补全 / 22 章”。本文将用户所说的 V1 理解为：从一句设定自动补全世界、确认写盘、启动一次 LLM 沙盘模拟、生成第一章正文并完成 P0 校验的整体版本流程。
+> 依据当前代码工作区整理。当前 CLI/API 正式运行路径实际标记为 `正式版V1`，但 Story Bootstrap API 注释中仍称为“V1 自动补全 / 22 章”。本文将用户所说的 V1 理解为：从一句设定自动补全世界、确认写盘、启动一次 LLM 沙盘模拟、生成第一章正文并完成 P0 校验的整体版本流程。
 
 ## 1. 项目定位
 
@@ -120,7 +120,7 @@ docs/
 2. `write_to_worlds_dir(result)` 写入世界配置。
 3. `WorldConfig.from_directory(world_dir)` 读取世界。
 4. `RuntimeWorldValidator.validate_for_formal_run` 校验正式运行条件。
-5. 构造 `SimulationRequest`，固定 `mode="llm"`、`v2_phase="v2.4"`。
+5. 构造 `SimulationRequest`，固定 `mode="llm"`、`version="正式版V1"`。
 6. 调用 `run_simulation(sim_request)`。
 
 参考：`api/server.py:941`、`api/server.py:954`、`api/server.py:983`、`api/server.py:1002`、`api/server.py:1021`。
@@ -135,7 +135,7 @@ docs/
 2. 检查 world 目录存在。
 3. 读取 `WorldConfig`。
 4. 若不允许不完整世界，则运行正式运行校验。
-5. 强制 `request.mode="llm"`、`request.v2_phase="v2.4"`。
+5. 强制 `request.mode="llm"`、`request.version="正式版V1"`。
 6. 创建后台线程执行 `_run_simulation_sync`。
 7. 后台线程中调用 `SimulationRunner.run(...)`。
 
@@ -153,7 +153,7 @@ docs/
 - `--seed/-s`：默认 `12345`
 - `--temperature`
 - `--max-retries`：默认 `2`
-- `--v2-phase`：仅支持 `v2.4`
+- `--version`：仅支持 `正式版V1`
 
 流程：
 
@@ -224,7 +224,7 @@ docs/
 2. 若 `allow_incomplete_world=false`，执行 `RuntimeWorldValidator.validate_for_formal_run`。
 3. 创建 `outputs/sim_*` 输出目录。
 4. 确定 `tick_limit`。
-5. 固定 `v2_phase="v2.4"`。
+5. 固定 `version="正式版V1"`。
 6. 解析 feature flags：
    - `allow_move=True`
    - `enable_memory=True`
@@ -324,7 +324,7 @@ P0 校验包含：
 - `encoding_health_report.json`
 - `draft_faithfulness_report.json`
 - `chapter_goal_completion_report.json`
-- `v2_phase_report.json`
+- `version_report.json`
 
 参考：`app/runner/simulation_runner.py:223`、`app/runner/simulation_runner.py:248`、`app/runner/simulation_runner.py:290`、`app/runner/simulation_runner.py:299`、`app/runner/simulation_runner.py:301`、`app/runner/simulation_runner.py:315`、`app/runner/simulation_runner.py:323`、`app/runner/simulation_runner.py:334`、`app/runner/simulation_runner.py:451`。
 
@@ -447,7 +447,7 @@ P0 校验包含：
 - `consistency_report.json`
 - `draft_faithfulness_report.json`
 - `validation_summary.json`
-- `v2_phase_report.json`
+- `version_report.json`
 - `llm_error.json`，仅 LLM 正文失败时
 - `quality_reports/ch_*_quality.json`，质量评估可用时
 - trace summary，LLM 模式启用 `TraceService` 时
@@ -468,7 +468,7 @@ P0 校验包含：
 
 ## 13. 当前实现注意点
 
-1. **版本命名不一致**：API 注释称 V1 自动补全，但 CLI/Runner 强制 `v2.4`。
+1. **版本命名不一致**：API 注释称 V1 自动补全，但 CLI/Runner 强制 `正式版V1`。
 2. **Bootstrap JSON array 与 response_format 的潜在冲突**：多个 generator 要 array，但 `chat_json` 请求 JSON object。
 3. **CLI max_retries 未进入 LLM client**：`max_retries` 参数传入 Runner，但当前 LLM client 未使用重试参数。
 4. **正文 prompt 存在编码异常文本**：`NarrativeService` 中部分中文字符串显示为 mojibake，但功能约束仍可读到部分英文关键规则。

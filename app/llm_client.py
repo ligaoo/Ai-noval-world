@@ -21,7 +21,7 @@ class LLMCost:
 @dataclass
 class LLMResponse:
     text: str
-    parsed_json: Optional[Dict[str, Any]] = None
+    parsed_json: Optional[Any] = None
     cost: LLMCost = field(default_factory=LLMCost)
     from_cache: bool = False
     trace_id: str = ""
@@ -29,7 +29,7 @@ class LLMResponse:
 
 class OpenAICompatibleClient:
     """
-    V2.1 强化版 OpenAI 兼容 Client。
+    正式版V1 OpenAI 兼容 Client。
     增加：调用缓存、trace、成本统计。
     """
 
@@ -40,31 +40,37 @@ class OpenAICompatibleClient:
         "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
     }
 
-    def __init__(self, api_key: str, base_url: str, model: str):
+    def __init__(self, api_key: str, base_url: str, model: str, max_retries: int = 2):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.max_retries = max(0, max_retries)
         self._cache: Dict[str, LLMResponse] = {}  # 简单内存缓存
 
     @classmethod
-    def from_env(cls) -> Optional["OpenAICompatibleClient"]:
+    def from_env(cls, max_retries: int = 2) -> Optional["OpenAICompatibleClient"]:
         """从环境变量创建（兼容旧代码）"""
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return None
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        return cls(api_key=api_key, base_url=base_url, model=model)
+        return cls(api_key=api_key, base_url=base_url, model=model, max_retries=max_retries)
 
     @classmethod
-    def from_config(cls, project_root=None) -> Optional["OpenAICompatibleClient"]:
-        """从配置文件创建（V2.3 推荐）"""
+    def from_config(cls, project_root=None, max_retries: int = 2) -> Optional["OpenAICompatibleClient"]:
+        """从配置文件创建（正式版V1 推荐）"""
         from app.config import Config
         cfg = Config(project_root)
         llm_cfg = cfg.get_llm_config()
         if not llm_cfg:
             return None
-        return cls(api_key=llm_cfg.api_key, base_url=llm_cfg.base_url, model=llm_cfg.model)
+        return cls(
+            api_key=llm_cfg.api_key,
+            base_url=llm_cfg.base_url,
+            model=llm_cfg.model,
+            max_retries=max_retries,
+        )
 
     def _calc_cost(self, usage: Dict[str, int]) -> LLMCost:
         """根据 usage 计算成本。"""
@@ -119,21 +125,37 @@ class OpenAICompatibleClient:
             payload["response_format"] = {"type": response_format}
 
         start_time = time.time()
-        r = requests.post(url, headers=headers, json=payload, timeout=120)
+        transient_statuses = {429, 500, 502, 503, 504}
+        last_error: Optional[BaseException] = None
+        r = None
 
-        if r.status_code >= 400:
+        for attempt in range(self.max_retries + 1):
             try:
-                error_detail = r.json()
-            except:
-                error_detail = r.text
-            error_msg = (
-                f"API 请求失败 (HTTP {r.status_code}):\n"
-                f"  URL: {url}\n"
-                f"  Model: {self.model}\n"
-                f"  Prompt 长度: system={len(system)} chars, user={len(user)} chars\n"
-                f"  错误详情: {json.dumps(error_detail, ensure_ascii=False, indent=2)}"
-            )
-            raise RuntimeError(error_msg)
+                r = requests.post(url, headers=headers, json=payload, timeout=120)
+                if r.status_code < 400:
+                    break
+
+                try:
+                    error_detail = r.json()
+                except Exception:
+                    error_detail = r.text
+                error_msg = (
+                    f"API 请求失败 (HTTP {r.status_code}):\n"
+                    f"  URL: {url}\n"
+                    f"  Model: {self.model}\n"
+                    f"  Prompt 长度: system={len(system)} chars, user={len(user)} chars\n"
+                    f"  错误详情: {json.dumps(error_detail, ensure_ascii=False, indent=2)}"
+                )
+                if r.status_code not in transient_statuses or attempt >= self.max_retries:
+                    raise RuntimeError(error_msg)
+                last_error = RuntimeError(error_msg)
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    raise RuntimeError(f"API 请求失败（网络异常）: {exc}") from exc
+
+        if r is None or r.status_code >= 400:
+            raise RuntimeError(str(last_error) if last_error else "API 请求失败")
 
         data = r.json()
         text = data["choices"][0]["message"]["content"]
@@ -164,7 +186,7 @@ class OpenAICompatibleClient:
         return self.chat(system, user, temperature, use_cache, response_format="json_object")
 
 
-def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:
+def _try_parse_json(text: str) -> Optional[Any]:
     text = text.strip()
     # 常见情况：模型用 ```json 包裹
     if text.startswith("```"):

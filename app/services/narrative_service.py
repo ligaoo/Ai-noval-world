@@ -15,13 +15,16 @@ from app.services.consistency_service import ConsistencyService
 from app.services.draft_faithfulness_checker import DraftFaithfulnessChecker
 from app.services.event_log_service import EventLogService
 from app.services.trace_service import LLMTrace, TraceService
+from app.models.rewrite_plan import StyleRewriteReport
+from app.services.narrative_style_rewriter import NarrativeStyleRewriter
+from app.services.rewrite_plan_builder import RewritePlanBuilder
 from app.services.writer_authorization_builder import WriterAuthorizationBuilder
 
 
 class NarrativeService:
     """
-    V2.3 鍙欎簨鐢熸垚鏈嶅姟
-    涓ゆ寮忥細瑙勫垯鐢熸垚 chapter_plan 鈫?LLM 鏀瑰啓姝ｆ枃
+    正式版V1 叙事生成服务。
+    先根据事件生成 chapter_plan，再由规则或 LLM 生成章节正文。
     """
 
     def __init__(
@@ -33,6 +36,10 @@ class NarrativeService:
         force_rule_based: bool = False,
         enable_consistency_check: bool = True,
         state: Optional[WorldState] = None,
+        chapter_brief: Optional[Any] = None,
+        scene_plan: Optional[Any] = None,
+        reveal_budget: Optional[Any] = None,
+        quality_controls: Optional[Any] = None,
     ):
         self.world = world
         self.sim_dir = sim_dir
@@ -40,6 +47,10 @@ class NarrativeService:
         self.trace_service = trace_service
         self.force_rule_based = force_rule_based
         self.enable_consistency_check = enable_consistency_check
+        self.chapter_brief = chapter_brief
+        self.scene_plan = scene_plan
+        self.reveal_budget = reveal_budget
+        self.quality_controls = quality_controls
         self.event_svc = EventLogService()
         self.consistency_svc = ConsistencyService(world, sim_dir, llm_client, trace_service)
         self.state = state or self._load_state()
@@ -100,6 +111,7 @@ class NarrativeService:
 
         # 2. 瑙勫垯鐢熸垚 chapter_plan
         plan = self._build_chapter_plan(filtered_plot_events)
+        scene_plan_dict = self._scene_plan_dict()
         with open(self.sim_dir / "chapter_plan.json", "w", encoding="utf-8") as f:
             json.dump({
                 "chapter_title": plan.chapter_title,
@@ -115,36 +127,107 @@ class NarrativeService:
                     for b in plan.beats
                 ],
                 "ending_hook_event_id": plan.ending_hook_event_id,
+                "quality_controls": self._quality_controls_dict(),
+                "reveal_budget": self._reveal_budget_dict(),
+                "chapter_brief": self._chapter_brief_dict(),
+                "scene_plan": scene_plan_dict,
+                "scene_count": len(scene_plan_dict.get("scenes", [])),
+                "scene_ids": [scene.get("scene_id") for scene in scene_plan_dict.get("scenes", [])],
+                "selected_event_ids": [event_id for scene in scene_plan_dict.get("scenes", []) for event_id in scene.get("event_ids", [])],
                 "writer_structured_context": structured_context,
             }, f, ensure_ascii=False, indent=2)
 
-        # 3. LLM 鐢熸垚姝ｆ枃锛堝鏋滄湁 llm_client锛?
         draft = ""
+        rewrite_report = StyleRewriteReport(rewrite_applied=False)
         if self.llm_client and not self.force_rule_based:
-            draft = self._llm_write_chapter(plan)
-            with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
-                f.write(draft)
+            raw_draft = self._llm_write_chapter(plan)
+            with open(self.sim_dir / "chapter_draft_raw.md", "w", encoding="utf-8") as f:
+                f.write(raw_draft)
 
-            # 4. 涓€鑷存€ф鏌?+ revise once
-            if self.enable_consistency_check:
-                report = self.consistency_svc.check_consistency(draft, plan, filtered_plot_events)
-                if not report["passed"] and report.get("violations"):
-                    draft = self.consistency_svc.revise_once(draft, plan, filtered_plot_events)
-                    # 閲嶆柊淇濆瓨淇鍚庣殑鐗堟湰
-                    with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
-                        f.write(draft)
-            else:
-                report = {"passed": True, "mode": "disabled", "violations": []}
-                with open(self.sim_dir / "consistency_report.json", "w", encoding="utf-8") as f:
-                    json.dump(report, f, ensure_ascii=False, indent=2)
-        else:
-            # 鏃?LLM锛氱敤瑙勫垯鐢熸垚绠€鍗曡崏绋?
-            draft = self._rule_based_draft(plan, structured_context)
+            raw_report = self.consistency_svc.check_consistency(raw_draft, plan, filtered_plot_events) if self.enable_consistency_check else {"passed": True, "mode": "disabled", "violations": []}
+            rewrite_plan = RewritePlanBuilder().build(
+                quality_report=None,
+                chapter_plan=self._load_chapter_plan_dict(),
+                scene_plan=self._scene_plan_dict(),
+            )
+            RewritePlanBuilder().save(self.sim_dir, rewrite_plan)
+
+            draft = raw_draft
+            try:
+                writer_authorization = structured_context.get("writer_authorization") or {}
+                rewritten = NarrativeStyleRewriter(self.llm_client).rewrite(
+                    draft=raw_draft,
+                    scene_plan=self._scene_plan_dict(),
+                    rewrite_plan=rewrite_plan,
+                    writer_authorization=writer_authorization,
+                )
+                rewritten_faithfulness = DraftFaithfulnessChecker(self.world, self.sim_dir).check(
+                    draft=rewritten,
+                    chapter_plan=self._load_chapter_plan_dict(),
+                    visible_events=filtered_plot_events,
+                    state=self.state,
+                )
+                rewritten_report = self.consistency_svc.check_consistency(rewritten, plan, filtered_plot_events) if self.enable_consistency_check else {"passed": True, "mode": "disabled", "violations": []}
+                if rewritten_report.get("passed") and rewritten_faithfulness.get("passed", True):
+                    draft = rewritten
+                    report = rewritten_report
+                    rewrite_report = StyleRewriteReport(
+                        style_profile="horror_suspense_default",
+                        input_draft_chars=len(raw_draft),
+                        output_draft_chars=len(rewritten),
+                        rewrite_applied=True,
+                        rewrite_focus=rewrite_plan.rewrite_plan,
+                        consistency_after_rewrite=rewritten_report,
+                        faithfulness_after_rewrite=rewritten_faithfulness,
+                    )
+                else:
+                    report = raw_report
+                    rewrite_report = StyleRewriteReport(
+                        style_profile="horror_suspense_default",
+                        input_draft_chars=len(raw_draft),
+                        output_draft_chars=len(raw_draft),
+                        rewrite_applied=False,
+                        rewrite_focus=rewrite_plan.rewrite_plan,
+                        consistency_after_rewrite=rewritten_report,
+                        faithfulness_after_rewrite=rewritten_faithfulness,
+                        fallback_reason="style rewrite failed consistency or faithfulness checks",
+                    )
+            except Exception as exc:
+                report = raw_report
+                rewrite_report = StyleRewriteReport(
+                    style_profile="horror_suspense_default",
+                    input_draft_chars=len(raw_draft),
+                    output_draft_chars=len(raw_draft),
+                    rewrite_applied=False,
+                    rewrite_focus=rewrite_plan.rewrite_plan,
+                    consistency_after_rewrite=raw_report,
+                    fallback_reason=str(exc),
+                )
+
             with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
                 f.write(draft)
+            with open(self.sim_dir / "style_rewrite_report.json", "w", encoding="utf-8") as f:
+                json.dump(rewrite_report.model_dump(), f, ensure_ascii=False, indent=2)
+        else:
+            draft = self._rule_based_draft(plan, structured_context)
+            with open(self.sim_dir / "chapter_draft_raw.md", "w", encoding="utf-8") as f:
+                f.write(draft)
+            with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
+                f.write(draft)
+            rewrite_plan = RewritePlanBuilder().build(
+                quality_report=None,
+                chapter_plan=self._load_chapter_plan_dict(),
+                scene_plan=self._scene_plan_dict(),
+            )
+            RewritePlanBuilder().save(self.sim_dir, rewrite_plan)
             report = {"passed": True, "mode": "rule_based", "violations": []}
             with open(self.sim_dir / "consistency_report.json", "w", encoding="utf-8") as f:
                 json.dump(report, f, ensure_ascii=False, indent=2)
+            with open(self.sim_dir / "style_rewrite_report.json", "w", encoding="utf-8") as f:
+                json.dump(rewrite_report.model_dump(), f, ensure_ascii=False, indent=2)
+
+        with open(self.sim_dir / "consistency_report.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
 
         self._write_chapter_debug_report(filtered_plot_events, structured_context, draft)
         draft_faithfulness_report = DraftFaithfulnessChecker(self.world, self.sim_dir).check(
@@ -205,7 +288,7 @@ class NarrativeService:
             if len(first_result) > 10:
                 return first_result[:10]
 
-        return "绗竴绔?" if self.world.bible.era == "鍙や唬" else "搴忕珷"
+        return "第一章" if self.world.bible.era == "古代" else "序章"
 
     def _select_ending_hook(self, beats: List[ChapterBeat], plot_events: List[EventLog]) -> Optional[str]:
         """閫夋嫨缁撳熬閽╁瓙锛氶€変竴涓腑绛夋偓蹇电殑浜嬩欢锛屼笉瑕侀€夋渶鎭愭€栫殑閭ｄ釜"""
@@ -218,40 +301,36 @@ class NarrativeService:
         return sorted_events[-1].event_id
 
     def _build_emotional_curve(self, events: List[EventLog]) -> List[str]:
-        """鏍规嵁 plot_value 鐢熸垚鎯呮劅鏇茬嚎
-
-        鏍稿績鍘熷垯锛氱揣寮犱笌鍠樻伅浜ゆ浛锛屼笉瑕佸叏绋嬮珮鑳?
-        """
+        """根据 plot_value 生成情绪曲线，交替保留紧张与喘息。"""
         curve = []
         for e in events:
             pv = e.plot_value
             tension = (pv.conflict + pv.mystery + pv.danger) / 3
             if pv.danger > 7:
-                curve.append("鍗遍櫓")
+                curve.append("危险")
             elif pv.conflict > 6:
-                curve.append("绱у紶")
+                curve.append("紧张")
             elif pv.mystery > 5:
-                curve.append("涓嶅畨")
+                curve.append("不安")
             elif tension > 4:
-                curve.append("鍘嬭揩")
+                curve.append("压迫")
             elif pv.progress > 5:
-                curve.append("鎺ㄨ繘")
+                curve.append("推进")
             else:
-                curve.append("瑙傚療")
-        # 鍘婚噸淇濈暀椤哄簭锛屼絾寮哄埗鎻掑叆鍠樻伅闃舵
+                curve.append("观察")
+
         unique = []
         seen = set()
         for i, c in enumerate(curve):
             if c not in seen:
                 unique.append(c)
                 seen.add(c)
-            # 姣忎袱涓揣寮犻樁娈靛悗鎻掑叆涓€涓?鍠樻伅"
-            if c in ("绱у紶", "涓嶅畨", "鍗遍櫓") and i < len(curve) - 1:
-                unique.append("鍠樻伅")
-                seen.add("鍠樻伅")
-        # 纭繚鏈夎捣鎵胯浆鍚?
+            if c in ("紧张", "不安", "危险") and i < len(curve) - 1:
+                unique.append("喘息")
+                seen.add("喘息")
+
         if len(unique) < 4:
-            unique = ["瑙傚療", "涓嶅畨", "绱у紶", "鍠樻伅", "鎮康"][:5]
+            unique = ["观察", "不安", "紧张", "喘息", "悬念"][:5]
         return unique
 
     def _build_beats(self, events: List[EventLog]) -> List[ChapterBeat]:
@@ -297,7 +376,7 @@ class NarrativeService:
     def _infer_purpose(self, loc_id: str, events: List[EventLog]) -> str:
         """Infer a generic beat purpose from event plot values."""
         if not events:
-            return "瑙傚療鍙樺寲"
+            return "观察变化"
 
         total_mystery = sum(e.plot_value.mystery for e in events)
         total_conflict = sum(e.plot_value.conflict for e in events)
@@ -306,14 +385,14 @@ class NarrativeService:
         event_types = {e.event_type for e in events}
 
         if total_danger > 8:
-            return "鍗遍櫓閫艰繎"
+            return "危险逼近"
         if total_conflict > 8 or "interaction" in event_types:
-            return "鍏崇郴鏂藉帇"
+            return "关系施压"
         if total_mystery > 8:
-            return "寮傚父娴幇"
+            return "异常浮现"
         if total_progress > 6:
-            return "绾跨储鎺ㄨ繘"
-        return "瑙傚療鍙樺寲"
+            return "线索推进"
+        return "观察变化"
 
     # ==========================================
     # LLM 姝ｆ枃鏀瑰啓
@@ -377,13 +456,12 @@ class NarrativeService:
             with open(error_file, "w", encoding="utf-8") as f:
                 json.dump(error_log, f, ensure_ascii=False, indent=2)
 
-            # 鎺у埗鍙拌緭鍑鸿缁嗛敊璇?
             print("\n" + "="*80)
-            print("LLM chapter generation failed")
+            print("LLM 章节生成失败")
             print("="*80)
-            print(f"閿欒绫诲瀷: {type(e).__name__}")
-            print(f"閿欒淇℃伅: {e}")
-            print(f"閿欒鏃ュ織宸蹭繚瀛樺埌: {error_file}")
+            print(f"错误类型: {type(e).__name__}")
+            print(f"错误信息: {e}")
+            print(f"错误日志已保存到: {error_file}")
             print("="*80 + "\n")
             # =========================================
 
@@ -430,37 +508,15 @@ class NarrativeService:
     @staticmethod
     def _build_narrative_system_prompt() -> str:
         return (
-            "浣犳槸绔犺妭 Writer銆備綘鐨勮亴璐ｄ笉鏄垱閫犲啿绐侊紝鑰屾槸鎶婁笂娓哥粨鏋勫寲缁撴灉鏂囧鍖栥€俓n"
-            "1. 鍙兘鍐?POV 鍙銆佸彲闂汇€佸彲瑙︺€佸彲鍥炲繂銆佸彲鍚堢悊鎬€鐤戠殑鍐呭銆俓n"
-            "2. allowed_facts 鍙互鍐欐垚纭畾浜嬪疄锛泂uspected_facts 鍙兘鍐欐垚鎬€鐤戞垨寮傚父銆俓n"
-            "3. forbidden_fact_labels 鍜?prevented_facts 涓嶅緱鍐欐垚鐪熺浉銆俓n"
-            "4. 鍙拌瘝鍙兘鏉ヨ嚜 spoken_segments銆乮nterruption_results銆乸ost_interruption_reactions銆俓n"
-            "5. 璋佽川鐤戙€佽皝鍙嶅銆佽皝鎵撴柇銆佽皝闅愮瀿銆佽皝璁╂锛屽繀椤绘潵鑷?agent_reactions銆乬roup_decisions銆乸rivate_tendency_triggers銆乺elationship_updates銆乮nteraction_events銆俓n"
-            "6. 濡傛灉缁撴瀯鍖栬緭鍏ラ噷娌℃湁瀵瑰簲鏉ユ簮锛屼笉寰楄嚜琛屽埗閫犲啿绐併€佹€€鐤戦摼鎴栧叧绯诲彉鍖栥€俓n"
-            "7. 涓嶈鎶婄郴缁熷瓧娈靛悕鎴栧悗鍙版湳璇啓杩涙鏂囥€俓n"
+            "你是章节 Writer。你的职责不是创造新的冲突，而是把上游结构化结果文学化。\n"
+            "1. 只能写 POV 能看见、听见、触碰、回忆或合理怀疑的内容。\n"
+            "2. allowed_facts 可以写成确定事实；suspected_facts 只能写成怀疑、异常或不确定感。\n"
+            "3. forbidden_fact_labels 和 prevented_facts 不得写成真相。\n"
+            "4. 台词只能来自 spoken_segments、interruption_results、post_interruption_reactions。\n"
+            "5. 质疑、反驳、打断、隐瞒、让步必须来自 agent_reactions、group_decisions、private_tendency_triggers、relationship_updates、interaction_events。\n"
+            "6. 如果结构化输入里没有对应来源，不得自行制造冲突、怀疑链或关系变化。\n"
+            "7. 不要把系统字段名、ID 或后台术语写进正文。\n"
             "8. Do not add plot-level facts, clues, rules, objects, routes, locations, or relationship changes beyond writer_authorization and structured upstream context.\n"
-        )
-        return (
-            "浣犳槸涓€浣嶅皬璇翠綔鑰咃紝璇锋妸缁欏畾绱犳潗鍐欐垚绗笁浜虹О鏈夐檺瑙嗚鐨勭珷鑺傛鏂囥€俓n"
-            "鍙娇鐢ㄧ敤鎴锋秷鎭噷缁欏嚭鐨勪笘鐣屻€佽鑹层€佸湴鐐广€佺墿浠躲€佸彲瑙佷簨浠跺拰瀹夊叏浜嬪疄锛涗笉瑕佸鐢ㄥ叾瀹冩晠浜嬫ā鏉裤€俓n"
-            "\n"
-            "銆愪簨瀹炶竟鐣屻€慭n"
-            "1. 鍙啓 POV 鑳界湅瑙併€佸惉瑙併€佽Е纰般€佸洖蹇嗘垨鍚堢悊鎬€鐤戠殑鍐呭銆俓n"
-            "2. allowed_facts 鍙啓鎴愮‘瀹氫簨瀹烇紱suspected_facts 鍙兘鍐欐垚鎬€鐤戙€佽繜鐤戙€佺煕鐩惧姩浣滄垨寮傚父鍙嶅簲銆俓n"
-            "3. forbidden_fact_labels 鍜?prevented_facts 涓嶅緱琚‘璁わ紝涓嶅緱鍐欐垚鏃佺櫧鐪熺浉鎴栧凡鍑哄彛鍙拌瘝銆俓n"
-            "4. 鍙拌瘝鍙兘鏉ヨ嚜 spoken_segments銆乮nterruption_results銆乸ost_interruption_reactions锛沺revented_segments / withheld_segments 涓嶈兘鍐欐垚宸茶鍑哄彛銆俓n"
-            "\n"
-            "銆愬疄浣撹竟鐣屻€慭n"
-            "1. 姝ｆ枃涓殑瑙掕壊鍚嶃€佸湴鐐瑰悕銆佺墿浠跺悕鍙兘鏉ヨ嚜鐧藉悕鍗曘€俓n"
-            "2. 绂佹鍑┖澧炲姞涓嶅湪鐧藉悕鍗曚腑鐨勪笓鏈夊悕銆佹満鏋勫悕銆佷翰灞炲叧绯汇€佽繃寰€缁忓巻鎴栦笘鐣岃鍒欍€俓n"
-            "3. 瑙掕壊 ID 鍙綔涓哄唴閮ㄧ害鏉燂紝涓嶈鍐欒繘姝ｆ枃銆俓n"
-            "\n"
-            "銆愬彊浜嬫柟寮忋€慭n"
-            "1. 涓嶈鍦ㄦ鏂囦腑澶嶈堪鎻愮ず璇嶇粨鏋勩€佺礌鏉愭竻鍗曘€佺郴缁熻瘝鎴栧悗鍙拌瘝銆俓n"
-            "2. 姝ｆ枃涓嶅緱鍑虹幇锛氫换鍔°€佺珷鑺傜洰鏍囥€佺墖娈点€佷簨浠舵棩蹇椼€乼ick銆丄gent銆佹矙鐩樸€佺煩闃点€佺郴缁熴€佸悗鍙般€佸墽鎯呭姬銆俓n"
-            "3. 涓栫晫绂佸繉銆佷紶闂诲拰鐜绾︽潫鍙兘閫氳繃琛屼负銆佽繜鐤戙€佸悗鏋溿€佺墿浠剁粏鑺傘€佹梺浜轰紶闂绘垨韬綋鍙嶅簲浣撶幇銆俓n"
-            "4. POV 瑙掕壊鐨勯瀵兼潈蹇呴』鐢辫瘉鎹€佸叧绯讳俊浠汇€佸嵄闄╁帇鍔涘拰褰撳墠鐘舵€侀€愭鑾峰緱锛涗綆璇佹嵁銆佷綆淇′换銆佷綆鍘嬪姏鏃朵笉瑕佽 POV 蹇€熸帉鎺у叏灞€銆俓n"
-            "5. 鐢ㄥ叿浣撴劅瀹樺拰鍔ㄤ綔鍒堕€犳皼鍥达紝閬垮厤鎬荤粨寮忔彮闇层€俓n"
         )
 
     def _build_narrative_user_prompt(self, plan: ChapterPlan, allowed_entities: Dict[str, List[str]]) -> str:
@@ -524,6 +580,30 @@ class NarrativeService:
                 lines.append(f"- {loc.name} (id={loc.id}): {desc}")
             lines.append("")
 
+        quality_controls = self._quality_controls_dict()
+        if quality_controls:
+            lines.append("[Quality controls]")
+            lines.append(json.dumps(quality_controls, ensure_ascii=False, indent=2))
+            lines.append("")
+
+        reveal_budget = self._reveal_budget_dict()
+        if reveal_budget:
+            lines.append("[Reveal budget]")
+            lines.append(json.dumps(reveal_budget, ensure_ascii=False, indent=2))
+            lines.append("")
+
+        chapter_brief = self._chapter_brief_dict()
+        if chapter_brief:
+            lines.append("[Chapter brief]")
+            lines.append(json.dumps(chapter_brief, ensure_ascii=False, indent=2))
+            lines.append("")
+
+        scene_plan = self._scene_plan_dict()
+        if scene_plan:
+            lines.append("[Scene plan]")
+            lines.append(json.dumps(scene_plan, ensure_ascii=False, indent=2))
+            lines.append("")
+
         lines.append("[Chapter plan]")
         lines.append(f"- title: {plan.chapter_title}")
         lines.append(f"- pov: {plan.pov}")
@@ -566,6 +646,8 @@ class NarrativeService:
 
         lines.append("[Writing requirements]")
         lines.append("Write chapter prose only. Do not expose system field names, IDs, or backend structure in the prose.")
+        lines.append("Use the scene plan as structure, but do not print scene titles, scene IDs, event IDs, or reveal_budget labels.")
+        lines.append("Each scene must have action, sensory detail, and information movement; do not restate events as a log.")
         lines.append("Use only visible facts and allowed entities. Do not reveal forbidden or prevented facts as truth.")
         lines.append("Dialogue and interpersonal conflict must come from the structured upstream context.")
         lines.append("Do not add plot-level facts, clues, rules, objects, routes, locations, or relationship changes that are absent from writer_authorization and structured upstream context.")
@@ -698,6 +780,42 @@ class NarrativeService:
             "unresolved_threads": causal_context["unresolved_threads"],
         }
 
+    def _quality_controls_dict(self) -> Dict[str, Any]:
+        if not self.quality_controls:
+            return {}
+        if hasattr(self.quality_controls, "model_dump"):
+            return self.quality_controls.model_dump()
+        if isinstance(self.quality_controls, dict):
+            return self.quality_controls
+        return {}
+
+    def _reveal_budget_dict(self) -> Dict[str, Any]:
+        if not self.reveal_budget:
+            return {}
+        if hasattr(self.reveal_budget, "model_dump"):
+            return self.reveal_budget.model_dump()
+        if isinstance(self.reveal_budget, dict):
+            return self.reveal_budget
+        return {}
+
+    def _scene_plan_dict(self) -> Dict[str, Any]:
+        if not self.scene_plan:
+            return {}
+        if hasattr(self.scene_plan, "model_dump"):
+            return self.scene_plan.model_dump()
+        if isinstance(self.scene_plan, dict):
+            return self.scene_plan
+        return {}
+
+    def _chapter_brief_dict(self) -> Dict[str, Any]:
+        if not self.chapter_brief:
+            return {}
+        if hasattr(self.chapter_brief, "model_dump"):
+            return self.chapter_brief.model_dump()
+        if isinstance(self.chapter_brief, dict):
+            return self.chapter_brief
+        return {}
+
     def _load_chapter_plan_dict(self) -> Dict[str, Any]:
         try:
             with open(self.sim_dir / "chapter_plan.json", "r", encoding="utf-8") as f:
@@ -734,6 +852,10 @@ class NarrativeService:
         report = {
             "counts": structured_context["counts"],
             "writer_input_contract_enforced": True,
+            "quality_controls": self._quality_controls_dict(),
+            "reveal_budget": self._reveal_budget_dict(),
+            "chapter_brief": self._chapter_brief_dict(),
+            "scene_plan": self._scene_plan_dict(),
             "traceability": traceability,
             "draft_preview": draft[:1200],
         }

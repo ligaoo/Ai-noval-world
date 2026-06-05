@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
 import asyncio
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-# Windows 编码修复：强制使用 UTF-8
+# Windows 编码修复：强制使用 UTF-8，避免替换 stdout/stderr 导致 uvicorn logging 持有已关闭 stream
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -19,11 +18,13 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.models.quality_controls import QualityControls, RewriteRequest
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-app = FastAPI(title="Novel Simulator API", version="5.2.0")
+app = FastAPI(title="Novel Simulator API", version="正式版V1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,31 +45,19 @@ running_simulations: Dict[str, Dict] = {}
 class SimulationRequest(BaseModel):
     world_id: str = "dark_city_001"
     mode: str = "llm"
-    v2_phase: str = "v2.4"
+    version: str = "正式版V1"
     ticks: Optional[int] = None
     seed: int = 12345
     genre_id: str = "horror"
     target_chapters: int = 10
     chapter_no: int = 1
-    allow_incomplete_world: bool = False
-
-
-class BootstrapRequest(BaseModel):
-    user_seed: str
-    target_genre: str = "horror_suspense"
-    target_words: int = 100000
-    auto_confirm: bool = False
-    world_id: Optional[str] = None
-
-
-# Bootstrap 候选存储（内存级；写盘后可重建）
-bootstrap_candidates: Dict[str, Dict] = {}
+    quality_controls: QualityControls = Field(default_factory=QualityControls)
 
 
 @app.get("/")
 async def root():
     return {
-        "message": "Novel Simulator API v5.2.0",
+        "message": "Novel Simulator API 正式版V1",
         "features": [
             "Genre Abstraction Layer",
             "Horror Genre Pack",
@@ -90,16 +79,6 @@ async def get_worlds():
                         bible = json.load(f)
                         world_info["title"] = bible.get("title", world_dir.name)
                         world_info["genre"] = bible.get("genre_id", "generic")
-                try:
-                    from app.models.world import WorldConfig
-                    from app.services.world_runtime_validator import RuntimeWorldValidator
-                    world = WorldConfig.from_directory(world_dir)
-                    validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
-                    world_info["formal_run_ready"] = validation.passed
-                    world_info["formal_run_issues"] = validation.issues[:5]
-                except Exception as exc:
-                    world_info["formal_run_ready"] = False
-                    world_info["formal_run_issues"] = [str(exc)]
                 worlds.append(world_info)
     return {"worlds": worlds}
 
@@ -111,32 +90,11 @@ async def get_world(world_id: str):
         raise HTTPException(status_code=404, detail="World not found")
 
     world_data = {"id": world_id}
-    for json_file in ["world_bible", "characters", "map", "clues", "quality_policy", "bootstrap_manifest"]:
+    for json_file in ["world_bible", "characters", "map", "clues", "quality_policy"]:
         file_path = world_dir / f"{json_file}.json"
         if file_path.exists():
             with open(file_path, "r", encoding="utf-8") as f:
                 world_data[json_file] = json.load(f)
-
-    try:
-        from app.models.world import WorldConfig
-        from app.services.world_runtime_validator import RuntimeWorldValidator
-        world = WorldConfig.from_directory(world_dir)
-        world_data["display"] = {
-            "characters": {char.id: char.name for char in world.characters.characters},
-            "locations": {loc.id: loc.name for loc in world.map.locations},
-        }
-        validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
-        world_data["formal_run_validation"] = {
-            "passed": validation.passed,
-            "issues": validation.issues,
-            "warnings": validation.warnings,
-        }
-    except Exception as exc:
-        world_data["formal_run_validation"] = {
-            "passed": False,
-            "issues": [str(exc)],
-            "warnings": [],
-        }
 
     return world_data
 
@@ -222,21 +180,10 @@ def _run_simulation_sync(sim_id: str, request: SimulationRequest):
 
         world_dir = WORLDS_DIR / request.world_id
         world = WorldConfig.from_directory(world_dir)
-        if not request.allow_incomplete_world:
-            from app.services.world_runtime_validator import RuntimeWorldValidator
-            validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
-            if not validation.passed:
-                running_simulations[sim_id]["status"] = "failed"
-                running_simulations[sim_id]["error"] = "当前 world 未完成模型补全或不可正式运行。"
-                running_simulations[sim_id]["validation"] = {
-                    "issues": validation.issues,
-                    "warnings": validation.warnings,
-                }
-                return
 
-        # 最新 v2.4 Agent Sandbox 统一使用：move+memory+LLM叙事+一致性修订
+        # 正式版V1 统一使用：move+memory+LLM叙事+一致性修订
         forced_mode = "llm"
-        forced_phase = "v2.4"
+        forced_version = "正式版V1"
 
         runner = SimulationRunner(PROJECT_ROOT)
         result = runner.run(
@@ -247,14 +194,15 @@ def _run_simulation_sync(sim_id: str, request: SimulationRequest):
             genre_id=request.genre_id,
             target_chapters=request.target_chapters,
             chapter_no=request.chapter_no,
-            v2_phase=forced_phase,
-            allow_incomplete_world=request.allow_incomplete_world,
+            version=forced_version,
+            quality_controls=request.quality_controls,
         )
 
         running_simulations[sim_id]["status"] = "completed"
         running_simulations[sim_id]["simulation_id"] = result.simulation_id
         running_simulations[sim_id]["runtime_mode"] = forced_mode
-        running_simulations[sim_id]["runtime_phase"] = forced_phase
+        running_simulations[sim_id]["runtime_version"] = forced_version
+        running_simulations[sim_id]["runtime_phase"] = forced_version
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -274,40 +222,15 @@ async def run_simulation(request: SimulationRequest):
                 detail="LLM 未配置。最终版本要求启用 LLM 叙事，请先配置 OPENAI_API_KEY。",
             )
 
-        from app.models.world import WorldConfig
-        from app.services.world_runtime_validator import RuntimeWorldValidator
-
-        world_dir = WORLDS_DIR / request.world_id
-        if not world_dir.exists():
-            raise HTTPException(status_code=404, detail="World not found")
-
-        world = WorldConfig.from_directory(world_dir)
-        if not request.allow_incomplete_world:
-            validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
-            if not validation.passed:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "message": "当前 world 未完成模型补全或不可正式运行，请先通过 Story Bootstrap 生成并确认完整世界。",
-                        "issues": validation.issues,
-                        "warnings": validation.warnings,
-                    },
-                )
-
-        request.mode = "llm"
-        request.v2_phase = "v2.4"
-
         # 生成模拟 ID
         import time
         sim_id = f"sim_{int(time.time() * 1000)}"
-
+        
         # 初始化模拟状态
         running_simulations[sim_id] = {
             "status": "running",
             "request": request.model_dump(),
             "error": None,
-            "runtime_mode": "llm",
-            "runtime_phase": "v2.4",
         }
 
         # 在后台线程中运行模拟
@@ -332,8 +255,64 @@ async def run_simulation(request: SimulationRequest):
 async def get_simulation_status(sim_id: str):
     if sim_id not in running_simulations:
         raise HTTPException(status_code=404, detail="Simulation not found")
-    
+
     return running_simulations[sim_id]
+
+
+@app.get("/api/simulations/{sim_id}/quality-controls")
+async def get_simulation_quality_controls(sim_id: str):
+    sim_dir = OUTPUTS_DIR / sim_id
+    return _read_simulation_artifact(sim_dir, "quality_controls.json")
+
+
+@app.get("/api/simulations/{sim_id}/reveal-budget")
+async def get_simulation_reveal_budget(sim_id: str):
+    sim_dir = OUTPUTS_DIR / sim_id
+    return _read_simulation_artifact(sim_dir, "reveal_budget.json")
+
+
+@app.get("/api/simulations/{sim_id}/continuity")
+async def get_simulation_continuity(sim_id: str):
+    sim_dir = OUTPUTS_DIR / sim_id
+    return _read_simulation_artifact(sim_dir, "chapter_continuity.json")
+
+
+@app.post("/api/simulations/{sim_id}/rewrite")
+async def rewrite_simulation_draft(sim_id: str, request: RewriteRequest):
+    sim_dir = OUTPUTS_DIR / sim_id
+    if not sim_dir.exists():
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    try:
+        from app.config import Config
+        from app.llm_client import OpenAICompatibleClient
+        from app.models.world import WorldConfig
+        from app.services.manual_rewrite_service import ManualRewriteService
+
+        world_id = ""
+        state_file = sim_dir / "state.json"
+        if state_file.exists():
+            state_data = json.loads(state_file.read_text(encoding="utf-8"))
+            world_id = state_data.get("world_id") or state_data.get("world", {}).get("world_id", "")
+        if not world_id:
+            worlds = await get_worlds()
+            world_id = (worlds.get("worlds") or [{}])[0].get("id", "dark_city_001")
+        world = WorldConfig.from_directory(WORLDS_DIR / world_id)
+        cfg = Config(PROJECT_ROOT)
+        llm_client = OpenAICompatibleClient.from_config(PROJECT_ROOT) if cfg.is_llm_available() else None
+        report = ManualRewriteService(world, sim_dir, llm_client).rewrite(request)
+        return {"success": True, "report": report}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _read_simulation_artifact(sim_dir: Path, filename: str):
+    if not sim_dir.exists():
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    path = sim_dir / filename
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 @app.get("/api/genres")
@@ -359,250 +338,12 @@ async def get_genre_profile(genre_id: str):
     return {"profile": profile.__dict__}
 
 
-class GenerateCharactersRequest(BaseModel):
-    world_id: str
-    count: int = 3
-    genre: str = "horror"
-
-
 class CreateWorldRequest(BaseModel):
     world_id: str
     title: str = "New World"
     genre: str = "horror"
     tone: str = ""
     era: str = "Modern"
-
-
-class SaveWorldRequest(BaseModel):
-    world_bible: Dict[str, Any] = {}
-    characters: List[Dict[str, Any]] = []
-    map: Any = []
-    clues: Any = []
-    plot_arcs: List[Dict[str, Any]] = []
-    character_arcs: List[Dict[str, Any]] = []
-    chapter_goal: Dict[str, Any] = {}
-
-
-class SaveCharactersRequest(BaseModel):
-    characters: List[Dict[str, Any]] = []
-
-
-class CompleteWorldRequest(BaseModel):
-    user_seed: Optional[str] = None
-    target_genre: str = "horror_suspense"
-    target_words: int = 100000
-    auto_confirm: bool = False
-    manual_world: Optional[Dict[str, Any]] = None
-
-
-@app.post("/api/generate/characters")
-async def generate_characters(request: GenerateCharactersRequest):
-    """基于世界观背景使用 LLM 生成角色候选"""
-    try:
-        from app.services.llm_character_generator import (
-            LLMCharacterGenerator,
-            CharacterGenerationRequest,
-        )
-
-        generator = LLMCharacterGenerator(PROJECT_ROOT)
-
-        gen_request = CharacterGenerationRequest(
-            world_id=request.world_id,
-            count=request.count,
-            genre=request.genre,
-        )
-
-        candidates = generator.generate(gen_request)
-
-        # 转换为字典返回
-        result = []
-        for c in candidates:
-            result.append({
-                "character_id": c.character_id,
-                "name": c.name,
-                "role": c.role,
-                "agent_type": c.agent_type,
-                "traits": c.traits,
-                "goals": c.goals,
-                "skills": c.skills,
-                "backstory": c.backstory,
-                "emotional_core": c.emotional_core,
-            })
-
-        return {
-            "success": True,
-            "candidates": result,
-            "message": f"成功生成 {len(result)} 个角色候选",
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def _slug(value: Any, fallback: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        text = fallback
-    return "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in text)
-
-
-def _normalize_action_type(action: Any) -> str:
-    mapping = {
-        "调查": "inspect",
-        "检查": "inspect",
-        "观察": "inspect",
-        "搜查": "search",
-        "搜索": "search",
-        "询问": "ask",
-        "对话": "talk",
-        "交谈": "talk",
-    }
-    text = str(action or "inspect").strip()
-    return mapping.get(text, text or "inspect")
-
-
-def _normalize_role(role: Any) -> str:
-    mapping = {
-        "主角": "protagonist",
-        "主人公": "protagonist",
-        "失踪者": "missing_person",
-        "隐藏反派": "hidden_actor",
-        "NPC": "npc",
-    }
-    text = str(role or "npc").strip()
-    return mapping.get(text, text or "npc")
-
-
-def _normalize_character(raw: Dict[str, Any], index: int) -> Dict[str, Any]:
-    char_id = raw.get("id") or raw.get("character_id") or _slug(raw.get("name"), f"char_{index + 1}")
-    personality = raw.get("personality") if isinstance(raw.get("personality"), dict) else {}
-    if raw.get("traits") and not personality.get("traits"):
-        personality["traits"] = raw.get("traits")
-    goals = raw.get("goals") if isinstance(raw.get("goals"), dict) else {}
-    return {
-        "id": char_id,
-        "name": raw.get("name") or char_id,
-        "role": _normalize_role(raw.get("role")),
-        "personality": personality,
-        "goals": goals,
-        "fears": raw.get("fears") or [],
-        "secrets": raw.get("secrets") or [],
-        "skills": raw.get("skills") or {"observation": 50, "logic": 50},
-        "initial_location": raw.get("initial_location") or raw.get("location_id") or "location_001",
-        "active_agent": raw.get("active_agent", True),
-        "visibility": raw.get("visibility") or "visible",
-        "narrative_function": raw.get("narrative_function") or [],
-        "personal_stakes": raw.get("personal_stakes") or "",
-        "background": raw.get("background") or raw.get("backstory") or "",
-        "known_facts": raw.get("known_facts") or raw.get("knows") or [],
-        "suspicions": raw.get("suspicions") or [],
-        "inventory": raw.get("inventory") or [],
-        "disclosure_policy": raw.get("disclosure_policy") or {},
-        "llm_temperature": raw.get("llm_temperature"),
-    }
-
-
-def _normalize_location_object(raw: Any, location_id: str, index: int) -> Dict[str, Any]:
-    if isinstance(raw, str):
-        object_id = _slug(raw, f"{location_id}_object_{index + 1}")
-        return {"id": object_id, "name": raw, "visible": True, "state": "", "description": raw}
-    object_id = raw.get("id") or raw.get("object_id") or _slug(raw.get("name"), f"{location_id}_object_{index + 1}")
-    return {
-        "id": object_id,
-        "name": raw.get("name") or object_id,
-        "visible": raw.get("visible", True),
-        "state": raw.get("state") or "",
-        "description": raw.get("description") or raw.get("name") or object_id,
-    }
-
-
-def _normalize_location(raw: Dict[str, Any], index: int) -> Dict[str, Any]:
-    location_id = raw.get("id") or raw.get("location_id") or _slug(raw.get("name"), f"location_{index + 1:03d}")
-    objects = raw.get("objects") or []
-    return {
-        "id": location_id,
-        "name": raw.get("name") or location_id,
-        "public_description": raw.get("public_description") or raw.get("description") or raw.get("name") or location_id,
-        "objects": [_normalize_location_object(obj, location_id, i) for i, obj in enumerate(objects)],
-        "connected_to": raw.get("connected_to") or [],
-        "danger_level": raw.get("danger_level") or 0,
-        "time_effects": raw.get("time_effects") or {},
-    }
-
-
-def _normalize_clue_route(raw: Dict[str, Any], clue_id: str, index: int) -> Dict[str, Any]:
-    action_type = _normalize_action_type(raw.get("action_type") or raw.get("action"))
-    return {
-        "route_id": raw.get("route_id") or f"{clue_id}_route_{index + 1}",
-        "action_type": action_type,
-        "target": raw.get("target") or raw.get("object_id") or "",
-        "location_id": raw.get("location_id") or "",
-        "topic": raw.get("topic"),
-        "required_skill": raw.get("required_skill"),
-        "difficulty": raw.get("difficulty") or 50,
-        "min_attitude": raw.get("min_attitude", 0),
-        "result_text": raw.get("result_text") or raw.get("result") or "",
-    }
-
-
-def _normalize_clue(raw: Dict[str, Any], index: int) -> Dict[str, Any]:
-    clue_id = raw.get("id") or raw.get("clue_id") or _slug(raw.get("name"), f"clue_{index + 1:03d}")
-    routes = raw.get("discover_routes") or []
-    return {
-        "id": clue_id,
-        "name": raw.get("name") or raw.get("title") or clue_id,
-        "content": raw.get("content") or "",
-        "truth_level": raw.get("truth_level") or raw.get("level") or "hidden_fact",
-        "importance": raw.get("importance") or 50,
-        "discover_routes": [_normalize_clue_route(route, clue_id, i) for i, route in enumerate(routes) if isinstance(route, dict)],
-        "on_discovered": raw.get("on_discovered") or {
-            "add_known_fact_to": "discoverer",
-            "plot_value": {"mystery": 5, "progress": 10, "conflict": 0},
-        },
-        "bootstrap_fact": raw.get("bootstrap_fact"),
-        "bootstrap_inventory": raw.get("bootstrap_inventory"),
-        "bootstrap_event": raw.get("bootstrap_event"),
-        "related_thread": raw.get("related_thread"),
-    }
-
-
-def _normalize_save_world_payload(world_id: str, request: SaveWorldRequest) -> Dict[str, Any]:
-    bible = dict(request.world_bible or {})
-    bible["world_id"] = world_id
-    bible.setdefault("title", world_id)
-    bible.setdefault("genre", "horror")
-    bible.setdefault("tone", "")
-    bible.setdefault("era", "Modern")
-    bible.setdefault("rules", [])
-    bible.setdefault("themes", [])
-    bible["draft"] = True
-    bible.setdefault("draft_reason", "手动编辑的世界草稿需要通过自动补全确认后才能正式运行。")
-
-    map_payload = request.map.get("locations", []) if isinstance(request.map, dict) else request.map
-    clues_payload = request.clues.get("clues", []) if isinstance(request.clues, dict) else request.clues
-
-    characters = [_normalize_character(c, i) for i, c in enumerate(request.characters or []) if isinstance(c, dict)]
-    locations = [_normalize_location(loc, i) for i, loc in enumerate(map_payload or []) if isinstance(loc, dict)]
-    clues = [_normalize_clue(clue, i) for i, clue in enumerate(clues_payload or []) if isinstance(clue, dict)]
-
-    chapter_goal = dict(request.chapter_goal or {})
-    chapter_goal.setdefault("goal", "Setup the story")
-    chapter_goal.setdefault("pov", characters[0]["id"] if characters else "char_protagonist")
-    chapter_goal.setdefault("start_time", "day1_08:00")
-    chapter_goal.setdefault("target_progress", 100)
-    chapter_goal.setdefault("tick_limit", 30)
-    chapter_goal.setdefault("no_progress_limit", 4)
-
-    return {
-        "world_bible.json": bible,
-        "characters.json": {"characters": characters},
-        "map.json": {"locations": locations},
-        "clues.json": {"clues": clues},
-        "chapter_goal.json": chapter_goal,
-        "plot_arcs.json": {"arcs": request.plot_arcs or []},
-        "character_arcs.json": {"arcs": request.character_arcs or []},
-    }
 
 
 @app.post("/api/worlds/create")
@@ -621,10 +362,13 @@ async def create_world(request: CreateWorldRequest):
             "genre": request.genre,
             "tone": request.tone,
             "era": request.era,
-            "rules": [],
-            "themes": [],
-            "draft": True,
-            "draft_reason": "手动创建的世界草稿不能直接正式运行，请先通过 Story Bootstrap 使用模型补全。",
+            "rules": [
+                "Add your world rules here"
+            ],
+            "themes": [
+                "Theme 1",
+                "Theme 2"
+            ]
         }
         
         default_characters = {
@@ -732,309 +476,11 @@ async def create_world(request: CreateWorldRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/api/worlds/{world_id}")
-async def save_world(world_id: str, request: SaveWorldRequest):
-    try:
-        world_dir = WORLDS_DIR / world_id
-        if not world_dir.exists():
-            raise HTTPException(status_code=404, detail="World not found")
-
-        files = _normalize_save_world_payload(world_id, request)
-        for filename, data in files.items():
-            with open(world_dir / filename, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-        return {
-            "success": True,
-            "world_id": world_id,
-            "message": "World draft saved",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.put("/api/worlds/{world_id}/characters")
-async def save_world_characters(world_id: str, request: SaveCharactersRequest):
-    try:
-        world_dir = WORLDS_DIR / world_id
-        if not world_dir.exists():
-            raise HTTPException(status_code=404, detail="World not found")
-
-        characters = [
-            _normalize_character(character, index)
-            for index, character in enumerate(request.characters or [])
-            if isinstance(character, dict)
-        ]
-        with open(world_dir / "characters.json", "w", encoding="utf-8") as f:
-            json.dump({"characters": characters}, f, ensure_ascii=False, indent=2)
-
-        return {
-            "success": True,
-            "world_id": world_id,
-            "message": "Characters saved",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================
-# Story Bootstrap APIs（V1 自动补全 / 22 章）
-# ============================================================
-def _build_bootstrapper():
-    """构造 StoryBootstrapper（带 LLM 客户端，若可用）"""
-    from app.bootstrap import StoryBootstrapper
-    from app.config import Config
-
-    cfg = Config(PROJECT_ROOT)
-    llm_client = None
-    if cfg.is_llm_available():
-        try:
-            from app.llm_client import OpenAICompatibleClient
-            llm_client = OpenAICompatibleClient.from_config(PROJECT_ROOT)
-        except Exception:
-            llm_client = None
-    return StoryBootstrapper(PROJECT_ROOT, llm_client=llm_client)
-
-
-def _load_bootstrap_result_from_disk(bootstrap_id: str):
-    from app.bootstrap import BootstrapResult
-
-    if not WORLDS_DIR.exists():
-        return None, None
-    for world_dir in WORLDS_DIR.iterdir():
-        if not world_dir.is_dir():
-            continue
-        result_file = world_dir / "bootstrap_result.json"
-        if not result_file.exists():
-            continue
-        data = json.loads(result_file.read_text(encoding="utf-8"))
-        if data.get("bootstrap_id") == bootstrap_id:
-            return BootstrapResult.model_validate(data), world_dir
-    return None, None
-
-
-def _load_bootstrap_manifest_from_disk(bootstrap_id: str):
-    if not WORLDS_DIR.exists():
-        return None, None
-    for world_dir in WORLDS_DIR.iterdir():
-        if not world_dir.is_dir():
-            continue
-        manifest = world_dir / "bootstrap_manifest.json"
-        if not manifest.exists():
-            continue
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-        if data.get("bootstrap_id") == bootstrap_id:
-            return data, world_dir
-    return None, None
-
-
-def _get_bootstrap_entry(bootstrap_id: str):
-    if bootstrap_id in bootstrap_candidates:
-        return bootstrap_candidates[bootstrap_id]
-
-    result, _ = _load_bootstrap_result_from_disk(bootstrap_id)
-    if result:
-        bootstrapper = _build_bootstrapper()
-        bootstrap_candidates[bootstrap_id] = {
-            "result": result,
-            "bootstrapper_ref": bootstrapper,
-        }
-        return bootstrap_candidates[bootstrap_id]
-    return None
-
-
-@app.post("/api/worlds/{world_id}/complete")
-async def complete_world(world_id: str, request: CompleteWorldRequest):
-    try:
-        from app.bootstrap.world_completion_service import WorldCompletionService
-
-        world_dir = WORLDS_DIR / world_id
-        if not world_dir.exists():
-            raise HTTPException(status_code=404, detail="World not found")
-
-        bootstrapper = _build_bootstrapper()
-        service = WorldCompletionService(PROJECT_ROOT, bootstrapper)
-        result = service.preview_completion(
-            world_id=world_id,
-            user_seed=request.user_seed,
-            manual_world_payload=request.manual_world,
-            target_genre=request.target_genre,
-            target_words=request.target_words,
-        )
-
-        bootstrap_candidates[result.bootstrap_id] = {
-            "result": result,
-            "bootstrapper_ref": bootstrapper,
-        }
-
-        if request.auto_confirm and result.validation and result.validation.passed:
-            result.status = "confirmed"
-            bootstrapper.write_to_worlds_dir(result)
-
-        return {
-            "bootstrap_id": result.bootstrap_id,
-            "world_id": result.world_id,
-            "status": result.status,
-            "title": result.title,
-            "summary": result.summary_dict(),
-            "validation": result.validation.model_dump() if result.validation else None,
-            "fusion_report": result.fusion_report,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/story/bootstrap")
-async def create_story_bootstrap(request: BootstrapRequest):
-    """
-    输入一句模糊设定 → 自动补全完整世界候选（不直接覆盖现有 worlds 目录）
-    """
-    try:
-        from app.bootstrap import BootstrapSeed
-
-        bootstrapper = _build_bootstrapper()
-        seed = BootstrapSeed(
-            user_seed=request.user_seed,
-            target_genre=request.target_genre,
-            target_words=request.target_words,
-            auto_confirm=request.auto_confirm,
-        )
-        result = bootstrapper.bootstrap(seed, world_id=request.world_id)
-
-        # 候选缓存
-        bootstrap_candidates[result.bootstrap_id] = {
-            "result": result,
-            "bootstrapper_ref": bootstrapper,
-        }
-
-        # 如果 auto_confirm，立即写盘
-        if request.auto_confirm and result.validation and result.validation.passed:
-            result.status = "confirmed"
-            bootstrapper.write_to_worlds_dir(result)
-
-        return {
-            "bootstrap_id": result.bootstrap_id,
-            "world_id": result.world_id,
-            "status": result.status,
-            "title": result.title,
-            "summary": result.summary_dict(),
-            "validation": result.validation.model_dump() if result.validation else None,
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/story/bootstrap/{bootstrap_id}")
-async def get_story_bootstrap(bootstrap_id: str):
-    """查看候选完整内容"""
-    entry = _get_bootstrap_entry(bootstrap_id)
-    if entry:
-        return entry["result"].model_dump(mode="json")
-
-    manifest, _ = _load_bootstrap_manifest_from_disk(bootstrap_id)
-    if manifest:
-        return manifest
-    raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
-
-
-@app.post("/api/story/bootstrap/{bootstrap_id}/confirm")
-async def confirm_story_bootstrap(bootstrap_id: str):
-    """确认候选并写入 worlds/<world_id>/"""
-    entry = _get_bootstrap_entry(bootstrap_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
-
-    result = entry["result"]
-    bootstrapper = entry["bootstrapper_ref"]
-
-    if not result.validation or not result.validation.passed:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Bootstrap 校验未通过或缺失，无法确认。",
-                "issues": [i.model_dump() for i in result.validation.issues] if result.validation else [],
-            },
-        )
-
-    result.status = "confirmed"
-    world_dir = bootstrapper.write_to_worlds_dir(result)
-    return {
-        "success": True,
-        "world_id": result.world_id,
-        "world_dir": str(world_dir),
-        "summary": result.summary_dict(),
-    }
-
-
-@app.post("/api/story/bootstrap/{bootstrap_id}/start")
-async def start_story_bootstrap(bootstrap_id: str):
-    """确认 + 立即启动一次模拟"""
-    entry = _get_bootstrap_entry(bootstrap_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Bootstrap candidate not found")
-
-    result = entry["result"]
-    bootstrapper = entry["bootstrapper_ref"]
-
-    if not result.validation or not result.validation.passed:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Bootstrap 校验未通过或缺失，无法启动模拟。",
-                "issues": [i.model_dump() for i in result.validation.issues] if result.validation else [],
-            },
-        )
-
-    # 1) 写盘
-    result.status = "confirmed"
-    world_dir = bootstrapper.write_to_worlds_dir(result)
-
-    from app.models.world import WorldConfig
-    from app.services.world_runtime_validator import RuntimeWorldValidator
-    world = WorldConfig.from_directory(world_dir)
-    validation = RuntimeWorldValidator().validate_for_formal_run(world, world_dir)
-    if not validation.passed:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Bootstrap 写盘后的 world 仍不可正式运行。",
-                "issues": validation.issues,
-                "warnings": validation.warnings,
-            },
-        )
-
-    # 2) 启动模拟（复用现有 run_simulation 路径）
-    sim_request = SimulationRequest(
-        world_id=result.world_id,
-        mode="llm",
-        v2_phase="v2.4",
-        seed=12345,
-        genre_id=(result.world_bible.get("genre") or "horror"),
-        target_chapters=10,
-        chapter_no=1,
-    )
-    return await run_simulation(sim_request)
-
-
 if __name__ == "__main__":
     import uvicorn
 
     print("=" * 60)
-    print("Novel Simulator API v5.2.0")
+    print("Novel Simulator API 正式版V1")
     print("=" * 60)
     print(f"Project Root: {PROJECT_ROOT}")
     print(f"Worlds Dir: {WORLDS_DIR}")
@@ -1045,4 +491,5 @@ if __name__ == "__main__":
         "api.server:app",
         host="0.0.0.0",
         port=8421,
+        reload=True,
     )

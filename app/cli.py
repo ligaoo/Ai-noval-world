@@ -1,29 +1,27 @@
 from pathlib import Path
 from typing import Optional
 
-import io
 import os
 import sys
 
-# Windows 编码修复：强制使用 UTF-8
+# Windows 编码修复：强制使用 UTF-8，避免替换 stdout/stderr 导致 logging 持有已关闭 stream
 if sys.platform == "win32":
-    try:
+    if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8")
-    except AttributeError:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     os.environ["PYTHONIOENCODING"] = "utf-8"
 
 import typer
 from rich.console import Console
 
 from app.config import Config
+from app.models.quality_controls import QualityControls
 from app.models.world import WorldConfig
 from app.runner.simulation_runner import SimulationRunner
 
 
-app = typer.Typer(no_args_is_help=True, help="小说沙盘引擎：默认最新 v2.4 Agent Sandbox")
+app = typer.Typer(no_args_is_help=True, help="小说沙盘引擎 正式版V1：LLM Agent + 记忆系统 + 叙事生成")
 console = Console()
 
 
@@ -35,10 +33,10 @@ def main(
     seed: int = typer.Option(12345, "--seed", "-s", help="随机种子（可复现）"),
     temperature: Optional[float] = typer.Option(None, "--temperature", help="LLM 温度（仅 llm 模式，默认从 .env 读取）"),
     max_retries: int = typer.Option(2, "--max-retries", help="LLM 最大重试次数（仅 llm 模式）"),
-    v2_phase: Optional[str] = typer.Option(
-        "v2.4",
-        "--v2-phase",
-        help="V2 阶段模式：仅支持 v2.4（Agent Sandbox + Intent Driven Interruption）",
+    version: Optional[str] = typer.Option(
+        "正式版V1",
+        "--version",
+        help="运行版本：正式版V1",
     ),
 ):
     project_root = Path(__file__).parent.parent
@@ -58,10 +56,11 @@ def main(
         console.print("[dim]   请在 .env 文件中配置 OPENAI_API_KEY[/dim]")
         actual_mode = "heuristic"
 
-    if v2_phase is None:
-        v2_phase = "v2.4"
-    elif v2_phase != "v2.4":
-        raise typer.BadParameter("旧阶段 v2.1/v2.2/v2.3 已删除，--v2-phase 仅支持 v2.4")
+    if version is not None and version != "正式版V1":
+        raise typer.BadParameter("--version 仅支持 正式版V1")
+
+    if version is None:
+        version = "正式版V1"
 
     worlds_dir = project_root / "worlds"
 
@@ -69,8 +68,8 @@ def main(
     world_config = WorldConfig.from_directory(worlds_dir / world)
 
     console.print(f"[bold]运行配置：[/bold] mode={actual_mode}, ticks={actual_ticks}, temperature={actual_temperature}")
-    if v2_phase:
-        console.print(f"[cyan]V2 阶段：[/cyan]{v2_phase}")
+    if version:
+        console.print(f"[cyan]运行版本：[/cyan]{version}")
     if cfg.is_llm_available():
         console.print(f"[dim]LLM 已就绪：{cfg.get_llm_config().model}[/dim]")
 
@@ -83,7 +82,8 @@ def main(
         seed=seed,
         temperature=actual_temperature,
         max_retries=max_retries,
-        v2_phase=v2_phase,  # type: ignore[arg-type]
+        version=version,  # type: ignore[arg-type]
+        quality_controls=QualityControls(),
     )
 
     console.print("\n[green][OK] 完成[/green]")

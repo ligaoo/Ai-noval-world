@@ -69,6 +69,11 @@ class TraceService:
         cached_calls = sum(1 for t in self.traces if t.from_cache)
         failed_calls = sum(1 for t in self.traces if not t.success)
         total_tokens = sum(t.total_tokens for t in self.traces)
+        total_retries = sum(t.retry_count for t in self.traces)
+        agent_decision_failures = sum(
+            1 for t in self.traces if t.purpose == "agent_decision" and not t.success
+        )
+        max_retry_count = max((t.retry_count for t in self.traces), default=0)
 
         return {
             "total_calls": total_calls,
@@ -77,6 +82,9 @@ class TraceService:
             "total_tokens": total_tokens,
             "cost_usd": round(self._total_cost, 6),
             "total_cost_usd": round(self._total_cost, 6),
+            "total_retries": total_retries,
+            "agent_decision_failures": agent_decision_failures,
+            "max_retry_count": max_retry_count,
         }
 
     def save_summary(self) -> None:

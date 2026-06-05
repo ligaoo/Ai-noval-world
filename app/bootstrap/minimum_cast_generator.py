@@ -35,7 +35,7 @@ class MinimumCastGenerator:
         parsed: ParsedSeed,
         gate_location_id: str,
     ) -> Optional[List[CharacterWithAgent]]:
-        system = "你是故事角色配置生成器，必须返回 JSON array，不要输出额外解释。"
+        system = "你是故事角色配置生成器，必须返回 JSON object，不要输出额外解释。"
         user = f"""
 请基于 ParsedSeed 生成可运行的最小角色组。
 
@@ -43,7 +43,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON array。
+- 返回 JSON object，格式为 {"characters": [...]}。
 - 每个对象字段必须兼容：character_id, name, role, active_agent, location_id, goal, personal_stakes, public_motive, private_motive, withheld_information, suspicious_micro_actions, private_hook, emotional_core, known_facts, suspicions, inventory, personality_traits, fears, secrets, background, narrative_function, visibility, llm_temperature。
 - 禁止使用“同行者甲/乙”“缺席者”“隐藏行动者”“知情者甲”“目击者乙”“NPC1”等测试感或功能标签式姓名；必须使用自然中文姓名或带具体职业/关系的称谓。
 - 每个 visible NPC 必须有公开目标、私人动机、隐瞒信息，以及至少 1 个容易被主角误读的 suspicious_micro_actions。
@@ -64,6 +64,10 @@ ParsedSeed:
                     text = re.sub(r"```json\s*", "", text)
                     text = re.sub(r"\s*```", "", text)
                 data = json.loads(text)
+            if isinstance(data, dict):
+                data = data.get("characters")
+            if not isinstance(data, list):
+                return None
             cast = [CharacterWithAgent(**item) for item in data]
             return cast if self._is_valid_minimum_cast(cast) else None
         except Exception:

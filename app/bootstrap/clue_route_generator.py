@@ -30,7 +30,7 @@ class ClueRouteGenerator:
         return self._generate_mystery_fallback(parsed)
 
     def _generate_with_llm(self, parsed: ParsedSeed) -> Optional[List[BootstrapClue]]:
-        system = "你是线索与发现路径生成器，必须返回 JSON array，不要输出额外解释。"
+        system = "你是线索与发现路径生成器，必须返回 JSON object，不要输出额外解释。"
         user = f"""
 请基于 ParsedSeed 生成第一章可发现 clues。
 
@@ -38,7 +38,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON array，每项字段：clue_id, title, content, level, related_event, related_thread, discover_routes, on_discovered。
+- 返回 JSON object，格式为 {"clues": [...]}，数组中每项字段：clue_id, title, content, level, related_event, related_thread, discover_routes, on_discovered。
 - 至少 4 条，并保留这些 clue_id：clue_new_lock_core, clue_frontdesk_key, clue_missing_mark, clue_fresh_footprints。
 - discover_routes 中 location_id 必须从 location_gate, location_frontdesk, location_hallway, location_archive 中选择；object_id 必须匹配默认地图对象：obj_gate_lock, obj_frontdesk_drawer, obj_fresh_footprints, obj_missing_file，或为空。
 - on_discovered 字段：add_known_fact, add_inventory_item, trigger_event, plot_progress。
@@ -53,6 +53,10 @@ ParsedSeed:
                     text = re.sub(r"```json\s*", "", text)
                     text = re.sub(r"\s*```", "", text)
                 data = json.loads(text)
+            if isinstance(data, dict):
+                data = data.get("clues")
+            if not isinstance(data, list):
+                return None
             clues = [BootstrapClue(**item) for item in data]
             expected = {"clue_new_lock_core", "clue_frontdesk_key", "clue_missing_mark", "clue_fresh_footprints"}
             return clues if expected.issubset({c.clue_id for c in clues}) else None

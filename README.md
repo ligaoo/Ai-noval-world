@@ -1,4 +1,4 @@
-# 小说沙盘引擎 (Novel Sandbox Engine) V1 正式版
+# 小说沙盘引擎 (Novel Sandbox Engine) 正式版V1
 
 > 一个基于 AI Agent 的长篇小说自动生成引擎，支持多角色交互、剧情推演、质量评估与成稿导出。
 
@@ -117,8 +117,8 @@ npm install
 ### 方式二：CLI 命令行
 
 ```bash
-# 标准运行（V1 正式版默认链路）
-python -m app.cli --world dark_city_001 --mode llm --v2-phase v2.4
+# 标准运行（正式版V1 默认链路）
+python -m app.cli --world dark_city_001 --mode llm --version 正式版V1
 
 # 指定目标章节数
 python -m app.cli --world dark_city_001 --mode llm --target-chapters 10
@@ -197,7 +197,7 @@ ai-noval-world/
 15. `metrics.json` - 性能指标
 16. `tuning_report.md` - 调优报告
 17. `errors.jsonl` - 错误日志
-18. `v2_phase_report.json` - V2 阶段报告
+18. `version_report.json` - 正式版V1 运行版本报告
 
 ## 🎮 端到端主流程
 
@@ -230,7 +230,7 @@ flowchart TD
 
 ### 运行模式
 
-V1 正式版默认链路：`llm + v2.4 Agent Sandbox`
+正式版V1 默认链路：`llm + Agent Sandbox`
 - ✅ move: 开启（角色移动）
 - ✅ memory: 开启（角色记忆）
 - ✅ LLM rewrite: 开启（LLM 正文改写）

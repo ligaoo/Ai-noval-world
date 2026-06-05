@@ -53,12 +53,25 @@ class WorldBibleGenerator:
             "core_location": parsed.core_location,
             "themes": themes,
             "rules": rules,
+            "core_motif": parsed.core_motif or (parsed.motif_keywords[0] if parsed.motif_keywords else supernatural),
+            "main_question": self._main_question(parsed, location, supernatural),
+            "hidden_truth": f"{supernatural}背后的真实机制暂时不能在第一章确认，只能通过{location}的痕迹制造怀疑。",
+            "first_volume_goal": parsed.group_goal or parsed.protagonist_goal or f"逐步确认{location}异常与角色目标之间的关系。",
+            "ending_direction": "真相应通过多章线索逐步逼近，而不是一次性解释。",
+            "forbidden_early_reveals": ["隐藏行动者身份", "异常完整规则", "最终真相"],
             "timeline": {
                 "origin_event": "异常或关键事件首次留下可追踪痕迹",
                 "escalation_event": "近期出现新的现场变化",
                 "opening_event": "角色在第一章进入或醒于核心地点",
             },
         }
+
+    def _main_question(self, parsed: ParsedSeed, location: str, supernatural: str) -> str:
+        if parsed.cast_mode == "ensemble_survival":
+            goal = parsed.group_goal or "共同脱离当前处境"
+            return f"被卷入{location}的角色必须理解什么规则，才可能{goal}？"
+        target = parsed.missing_person or parsed.protagonist_goal or "关键真相"
+        return f"{target}与{location}中出现的{supernatural}究竟有什么关系？"
 
     def _fallback_title(self, parsed: ParsedSeed, world_id: str) -> str:
         location = parsed.core_location or "异境"

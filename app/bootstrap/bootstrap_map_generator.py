@@ -58,7 +58,7 @@ class BootstrapMapGenerator:
         ]
 
     def _generate_with_llm(self, parsed: ParsedSeed) -> Optional[List[BootstrapLocation]]:
-        system = "你是可运行地图生成器，必须返回 JSON array，不要输出额外解释。"
+        system = "你是可运行地图生成器，必须返回 JSON object，不要输出额外解释。"
         user = f"""
 请基于 ParsedSeed 生成最小可运行地图。
 
@@ -66,7 +66,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON array，每项字段：location_id, name, type, connected_to, available_actions, public_description, objects, danger_level。
+- 返回 JSON object，格式为 {"locations": [...]}，数组中每项字段：location_id, name, type, connected_to, available_actions, public_description, objects, danger_level。
 - 必须包含这些 location_id：location_gate, location_frontdesk, location_hallway, location_archive, location_basement, location_witness_point, location_inner。
 - 必须包含对象：obj_gate_lock 位于 location_gate；obj_frontdesk_drawer 位于 location_frontdesk；obj_fresh_footprints 位于 location_hallway；obj_missing_file 位于 location_archive。
 - 名称和描述必须从 ParsedSeed 的 core_location、story_type、cast_mode 推导；不要固定成医院、病案室、小卖部、前台钥匙。
@@ -80,6 +80,10 @@ ParsedSeed:
                     text = re.sub(r"```json\s*", "", text)
                     text = re.sub(r"\s*```", "", text)
                 data = json.loads(text)
+            if isinstance(data, dict):
+                data = data.get("locations")
+            if not isinstance(data, list):
+                return None
             locations = [BootstrapLocation(**item) for item in data]
             expected = {
                 "location_gate", "location_frontdesk", "location_hallway", "location_archive",

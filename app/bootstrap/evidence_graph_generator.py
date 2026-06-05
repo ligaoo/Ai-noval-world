@@ -27,7 +27,7 @@ class EvidenceGraphGenerator:
         return self._generate_mystery_fallback(parsed)
 
     def _generate_with_llm(self, parsed: ParsedSeed) -> Optional[List[EvidenceItem]]:
-        system = "你是证据图生成器，必须返回 JSON array，不要输出额外解释。"
+        system = "你是证据图生成器，必须返回 JSON object，不要输出额外解释。"
         user = f"""
 请基于 ParsedSeed 生成 evidence_graph。
 
@@ -35,7 +35,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON array，每项字段：evidence_id, title, type, truth_relevance, purpose, related_thread, can_mislead, real_meaning, allowed_reveal_chapters。
+- 返回 JSON object，格式为 {"evidence_graph": [...]}，数组中每项字段：evidence_id, title, type, truth_relevance, purpose, related_thread, can_mislead, real_meaning, allowed_reveal_chapters。
 - 至少 3 条证据，必须能支撑第一章线索和 truth_chain 的 surface 阶段。
 - evidence_id 使用稳定英文 id；如需与现有 clue fallback 兼容，可使用 ev_new_lock_core、ev_fresh_footprints、ev_key_signal，但不要让 id 绑定固定剧情含义。
 - 内容必须从 ParsedSeed 推导；信息不足时只补充结构性证据，不要固定成某个地点、旧案、物件或亲属失踪模板。
@@ -49,6 +49,10 @@ ParsedSeed:
                     text = re.sub(r"```json\s*", "", text)
                     text = re.sub(r"\s*```", "", text)
                 data = json.loads(text)
+            if isinstance(data, dict):
+                data = data.get("evidence_graph")
+            if not isinstance(data, list):
+                return None
             evidence = [EvidenceItem(**item) for item in data]
             return evidence if len(evidence) >= 3 else None
         except Exception:

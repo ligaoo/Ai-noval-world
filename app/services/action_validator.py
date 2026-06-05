@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from app.models.action import ActionCommand
 from app.models.state import WorldState
@@ -24,6 +24,7 @@ class ActionValidator:
     def __init__(self, world: WorldConfig):
         self.world = world
         self.allowed_actions = {"observe", "inspect", "search", "talk", "ask", "wait", "move"}
+        self.environment_actions = {"observe", "inspect", "search", "wait"}
 
     def validate(
         self, action: ActionCommand, state: WorldState, agent_id: str
@@ -38,11 +39,18 @@ class ActionValidator:
         agent_state = state.characters[agent_id]
         current_loc = self.world.map.get_location(agent_state.location_id)
 
-        # 2. move 动作专门校验
+        # 2. move / 非 move 动作目标校验
         if action.action_type == "move":
             self._validate_move(action, current_loc, errors, warnings)
+        elif action.action_type in self.environment_actions:
+            valid_targets = self._get_valid_targets(agent_state.location_id, state, agent_id)
+            valid_targets.add(agent_state.location_id)
+            if action.target and action.target not in valid_targets:
+                errors.append(
+                    f"target '{action.target}' 不在当前地点 '{agent_state.location_id}' 的合法目标列表：{valid_targets}"
+                )
         else:
-            # 非 move 动作：target 必须是当前地点的 objects 或在场角色
+            # ask/talk 动作：target 必须是当前地点的 objects 或在场角色
             valid_targets = self._get_valid_targets(agent_state.location_id, state, agent_id)
             if action.target and action.target not in valid_targets:
                 errors.append(
@@ -70,7 +78,74 @@ class ActionValidator:
                         f"Agent 引用了未发现的线索内容（知识边界违规）：{clue.id}"
                     )
 
+        # 5. 私密披露兜底校验：低信任/高不确定关系下不得 exact match 暴露受保护私人信息
+        self._validate_private_disclosure(action, state, agent_id, errors, warnings)
+
         return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+    @staticmethod
+    def _disclosure_policy(profile) -> Dict[str, Any]:
+        policy = dict(getattr(profile, "disclosure_policy", {}) or {})
+        return {
+            "min_trust_for_secret_disclosure": policy.get("min_trust_for_secret_disclosure", 5),
+            "max_suspicion_for_secret_disclosure": policy.get("max_suspicion_for_secret_disclosure", 2),
+            "max_hostility_for_secret_disclosure": policy.get("max_hostility_for_secret_disclosure", 1),
+            "require_relationship_evidence": policy.get("require_relationship_evidence", True),
+            "private_fields": policy.get("private_fields", []),
+        }
+
+    @classmethod
+    def _private_facts_for_profile(cls, profile) -> List[str]:
+        policy = cls._disclosure_policy(profile)
+        facts: List[str] = []
+        facts.extend([secret for secret in getattr(profile, "secrets", []) if secret])
+        for value in [
+            getattr(profile, "private_motive", ""),
+            getattr(profile, "withheld_information", ""),
+        ]:
+            if value:
+                facts.append(value)
+        if "background" in policy["private_fields"] and getattr(profile, "background", ""):
+            facts.append(profile.background)
+        return facts
+
+    def _validate_private_disclosure(
+        self,
+        action: ActionCommand,
+        state: WorldState,
+        agent_id: str,
+        errors: List[str],
+        warnings: List[str],
+    ) -> None:
+        if action.action_type not in {"ask", "talk"}:
+            return
+        if not action.target or action.target not in state.characters:
+            return
+        if action.target == agent_id:
+            return
+
+        actor_profile = self.world.characters.get_character(agent_id)
+        policy = self._disclosure_policy(actor_profile)
+        rel = state.characters[agent_id].relationships.get(action.target)
+        trust = rel.trust if rel else 0
+        suspicion = rel.suspicion if rel else 0
+        hostility = rel.hostility if rel else 0
+        evidence = list(rel.evidence) if rel else []
+
+        trust_ok = trust >= policy["min_trust_for_secret_disclosure"]
+        suspicion_ok = suspicion <= policy["max_suspicion_for_secret_disclosure"]
+        hostility_ok = hostility <= policy["max_hostility_for_secret_disclosure"]
+        evidence_ok = (not policy["require_relationship_evidence"]) or bool(evidence) or trust_ok
+        if trust_ok and suspicion_ok and hostility_ok and evidence_ok:
+            return
+
+        action_text = f"{action.intent} {action.method} {action.dialogue or ''} {action.expected_gain or ''}"
+        for private_fact in self._private_facts_for_profile(actor_profile):
+            if private_fact and private_fact in action_text:
+                errors.append(
+                    f"私人披露违规：{agent_id} 对低信任/高不确定目标 {action.target} 暴露了受保护私人信息"
+                )
+                return
 
     def _validate_move(
         self, action: ActionCommand, current_loc, errors: List[str], warnings: List[str]

@@ -95,9 +95,13 @@ class ChapterContinuityService:
         self, events: List[Dict[str, Any]], state: WorldState
     ) -> List[str]:
         """从事件中提取未解决的悬念"""
-        threads: List[str] = []
+        threads = [
+            "谁换了医院的锁？",
+            "看门人为什么隐瞒？",
+            "医院是否与林舟的噩梦有关？",
+        ]
 
-        # 根据实际事件添加（不再硬编码"医院/林舟/看门人"等无关本世界的内容）
+        # 根据实际事件添加
         for evt in events:
             result = evt.get("result", "")
             if "锁" in result and "换" in result:
@@ -106,27 +110,20 @@ class ChapterContinuityService:
             if "档案" in result or "记录" in result:
                 if "记录里写了什么？" not in threads:
                     threads.append("记录里写了什么？")
-            if "隐瞒" in result or "说谎" in result:
-                if "对方在隐瞒什么？" not in threads:
-                    threads.append("对方在隐瞒什么？")
 
         return threads[:5]  # 最多保留 5 个主线悬念
 
     def _generate_next_seeds(
         self, state: WorldState, plot_events: List[Dict[str, Any]]
     ) -> List[str]:
-        """生成下一章的探索方向种子（基于当前世界的地点）"""
-        seeds: List[str] = []
-        # 优先复用世界内已知地点
-        try:
-            for loc in self.world.map.locations[:3]:
-                seeds.append(f"探索 {loc.name}")
-        except Exception:
-            pass
-
-        if not seeds:
-            seeds = ["继续推进当前线索", "尝试和关键 NPC 接触", "寻找新的环境异常"]
-        return seeds[:3]
+        """生成下一章的探索方向种子"""
+        seeds = [
+            "调查大厅前台区域",
+            "追问看门人关于锁的来源",
+            "寻找旧医院档案",
+            "检查是否有其他出入口",
+        ]
+        return seeds[:3]  # 给 3 个方向
 
     def _generate_natural_summary(
         self,
@@ -155,14 +152,14 @@ class ChapterContinuityService:
             return f"{title}：{event_text}调查仍在进行中。"
 
     def build_next_chapter_context(self) -> ChapterContext:
-        """构建下一章的上下文（避免硬编码旧医院主题）"""
+        """构建下一章的上下文"""
         if not self.chapter_summaries:
             # 第一章
             return ChapterContext(
                 chapter_number=1,
-                previous_chapter_summary="故事开启，主角进入当前场景。",
-                open_threads=["这个地方到底发生了什么？"],
-                next_chapter_seeds=["探索入口区域", "寻找关键信息"],
+                previous_chapter_summary="调查开始，林舟进入旧医院。",
+                open_threads=["旧医院是否真的废弃？"],
+                next_chapter_seeds=["检查入口区域", "与看门人交谈"],
                 inherited_facts=[],
                 inherited_beliefs={},
             )
@@ -196,16 +193,16 @@ class ChapterContinuityService:
         )
 
     def _generate_soft_pressure(self, open_threads: List[str]) -> List[str]:
-        """生成软导演压力提示（避免硬编码特定角色或地点）"""
+        """生成软导演压力提示"""
         if not open_threads:
             return []
 
         pressures = []
         for t in open_threads[:2]:
             if "锁" in t:
-                pressures.append("主角觉得那把新锁背后一定有文章，不能就这么放过。")
+                pressures.append("林舟觉得那把新锁背后一定有文章，不能就这么放过。")
             elif "隐瞒" in t or "为什么" in t:
-                pressures.append("对方的闪烁其词让你更加确信有什么被掩盖了。")
+                pressures.append("看门人的闪烁其词让你更加确信有什么被掩盖了。")
             elif "噩梦" in t or "记忆" in t:
                 pressures.append("这个地方似乎在唤醒你不想记起的东西。")
 

@@ -14,6 +14,14 @@ class WorldBible(BaseModel):
     era: str = ""
     rules: List[str] = Field(default_factory=list)
     themes: List[str] = Field(default_factory=list)
+    core_motif: str = ""
+    main_question: str = ""
+    hidden_truth: str = ""
+    first_volume_goal: str = ""
+    ending_direction: str = ""
+    forbidden_early_reveals: List[str] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
 
 
 class WorldObject(BaseModel):
@@ -32,6 +40,12 @@ class Location(BaseModel):
     connected_to: List[str] = Field(default_factory=list)
     danger_level: int = 0
     time_effects: Dict[str, Any] = Field(default_factory=dict)
+    narrative_function: str = ""
+    information_gap: str = ""
+    suitable_conflicts: List[str] = Field(default_factory=list)
+    forbidden_events: List[str] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
 
 
 class MapConfig(BaseModel):
@@ -71,6 +85,12 @@ class CharacterProfile(BaseModel):
     narrative_function: List[str] = Field(default_factory=list)
     personal_stakes: str = ""
     background: str = ""
+    public_motive: str = ""
+    private_motive: str = ""
+    withheld_information: str = ""
+    misbeliefs_about_others: List[str] = Field(default_factory=list)
+    current_pressure: str = ""
+    triggered_behavior_patterns: List[str] = Field(default_factory=list)
     known_facts: List[str] = Field(default_factory=list)
     suspicions: List[str] = Field(default_factory=list)
     inventory: List[str] = Field(default_factory=list)
