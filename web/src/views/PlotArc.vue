@@ -170,7 +170,7 @@
             <PInputText
               v-model="newArc.arc_id"
               class="w-full input-dark"
-              placeholder="例如：arc_hospital_truth"
+              placeholder="例如：arc_main"
             />
           </div>
           <div>
@@ -178,7 +178,7 @@
             <PInputText
               v-model="newArc.name"
               class="w-full input-dark"
-              placeholder="例如：旧医院真相篇"
+              placeholder="例如：主线剧情"
             />
           </div>
           <div>

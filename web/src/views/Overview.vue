@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<template>
+﻿﻿﻿﻿﻿﻿<template>
   <div style="max-width: 1200px; margin: 0 auto;">
     <!-- 页面标题 -->
     <div style="margin-bottom: 32px; display: flex; align-items: center; justify-content: space-between;">
@@ -110,7 +110,7 @@
             <label style="font-size: 14px; color: #9ca3af; display: block; margin-bottom: 8px;">世界 ID</label>
             <input
               v-model="worldBible.world_id"
-              placeholder="例如：dark_city_001"
+              placeholder="例如：my_world_001"
               style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 12px 16px; border-radius: 12px; outline: none;"
             />
           </div>
@@ -162,7 +162,7 @@
               v-for="(rule, index) in worldBible.rules"
               :key="index"
               v-model="worldBible.rules[index]"
-              placeholder="例如：旧医院午夜后才会出现四楼"
+              placeholder="输入一条世界规则"
               style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 12px 16px; border-radius: 12px; outline: none;"
             />
           </div>
@@ -553,23 +553,10 @@ const loadSelectedWorld = async () => {
   if (!selectedWorldId.value) return
   
   try {
-    const response = await fetch(`http://localhost:8421/api/worlds/${selectedWorldId.value}`)
-    if (!response.ok) throw new Error('World not found')
-    
-    const worldData = await response.json()
-    
-    worldStore.worldId = selectedWorldId.value
-    worldStore.worldBible = worldData.world_bible || {}
-    if (!worldStore.worldBible.world_id) {
-      worldStore.worldBible.world_id = selectedWorldId.value
-    }
-    worldStore.characters = worldData.characters?.characters || []
-    worldStore.locations = worldData.map?.locations || []
-    worldStore.clues = worldData.clues?.clues || []
-    worldStore.plotArcs = worldData.plot_arcs?.arcs || worldData.plot_arcs || []
+    await worldStore.loadWorld(selectedWorldId.value)
     completionResult.value = null
 
-    alert(`✅ 已加载世界: ${worldStore.worldBible.title}`)
+    alert(`✅ 已加载世界: ${worldStore.worldBible?.title || selectedWorldId.value}`)
   } catch (error) {
     console.error('加载世界失败:', error)
     alert(`❌ 加载世界失败: ${error.message}`)
@@ -633,7 +620,7 @@ const createNewWorld = async () => {
 // 确保 worldBible 始终是一个有效对象，防止 v-model 绑定到临时空对象导致数据丢失
 const worldBible = computed({
   get() {
-    return worldStore.worldBible || {}
+    return worldStore.worldBible || { world_id: '', title: '', genre: '', tone: '', era: '', rules: [], themes: [] }
   },
   set(value) {
     worldStore.worldBible = value

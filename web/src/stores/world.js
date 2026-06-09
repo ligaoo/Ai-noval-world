@@ -30,6 +30,8 @@ export const useWorldStore = defineStore('world', () => {
   const clues = ref(savedState?.clues || [])
   const plotArcs = ref(savedState?.plotArcs || [])
   const characterArcs = ref(savedState?.characterArcs || [])
+  const isLoading = ref(false)
+  const loadError = ref('')
 
   // 自动保存至 localStorage
   const saveToStorage = () => {
@@ -95,195 +97,123 @@ export const useWorldStore = defineStore('world', () => {
   })
 
   // 方法
-  function loadWorld(id) {
-    worldId.value = id
-
-    // 模拟加载数据
-    // 实际项目中这里会调用 API
-    worldBible.value = {
-      world_id: id,
-      title: '旧医院真相',
-      genre: '悬疑灵异',
-      tone: '克制、压抑、现实中透出诡异',
-      era: '现代都市',
-      rules: [
-        '旧医院午夜后才会出现四楼',
-        '看门人害怕惹事，不会主动说出完整真相',
-      ],
-      themes: ['记忆是否可靠', '人如何逃避愧疚'],
-    }
-
-    characters.value = [
-      {
-        character_id: 'char_linzho',
-        name: '林舟',
-        role: 'protagonist',
-        agent_type: 'core_agent',
-        traits: ['克制', '敏感', '逃避冲突'],
-        goals: {
-          short_term: '确认旧医院是否与噩梦有关',
-          long_term: '找回童年事故的真相',
-        },
-        skills: { observation: 75, social: 40, courage: 35, logic: 70 },
-        initial_location: 'old_hospital_gate',
-      },
-      {
-        character_id: 'char_guard',
-        name: '老周',
-        role: 'gatekeeper',
-        agent_type: 'semi_agent_npc',
-        traits: ['警惕', '怕惹事', '贪小便宜', '内心有愧'],
-        goals: {
-          short_term: '别让陌生人惹麻烦',
-          long_term: '拿到钱就退休',
-        },
-        skills: { observation: 50, social: 60 },
-        initial_location: 'old_hospital_gate',
-      },
-    ]
-
-    locations.value = [
-      {
-        location_id: 'old_hospital_gate',
-        name: '医院大门',
-        public_description: '铁栅栏门锈迹斑斑，透过缝隙能看到里面破旧的住院楼。',
-        connected_to: ['hospital_lobby'],
-        objects: ['hospital_gate_lock', 'guard_booth'],
-        available_topics: ['hospital_history', 'lock_condition'],
-        danger_level: 1,
-      },
-      {
-        location_id: 'hospital_lobby',
-        name: '医院大厅',
-        public_description: '大厅里落满灰尘，前台后方有一排旧柜子。',
-        connected_to: ['old_hospital_gate', 'archive_room', 'second_floor'],
-        objects: ['front_desk', 'old_cabinet', 'stairs'],
-        available_topics: ['hospital_history', 'archive_room'],
-        danger_level: 2,
-      },
-      {
-        location_id: 'archive_room',
-        name: '档案室',
-        public_description: '一排排金属架子堆满了积灰的档案，空气中弥漫着陈旧的气味。',
-        connected_to: ['hospital_lobby'],
-        objects: ['file_shelf_1', 'file_shelf_2', 'locked_drawer'],
-        available_topics: ['patient_records', 'old_incidents'],
-        danger_level: 3,
-      },
-    ]
-
-    clues.value = [
-      {
-        clue_id: 'hf_001',
-        name: '最近更换的铁锁',
-        content: '医院大门的锁最近被换过。',
-        level: 'minor',
-        arc_id: 'arc_hospital_truth',
-        allowed_stages: ['setup', 'investigation'],
-        importance: 60,
-        discover_routes: [
-          {
-            route_id: 'route_hf001_inspect_lock',
-            action_type: 'inspect',
-            target: 'hospital_gate_lock',
-            location_id: 'old_hospital_gate',
-            required_skill: 'observation',
-            difficulty: 60,
-            result: '锁芯比锁身干净得多，像是最近刚换过。',
-          },
-        ],
-      },
-    ]
-
-    plotArcs.value = [
-      {
-        arc_id: 'arc_hospital_truth',
-        name: '旧医院真相篇',
-        status: 'active',
-        current_stage: 'setup',
-        progress: 0,
-        stages: [
-          {
-            stage_id: 'setup',
-            name: '建立异常',
-            purpose: '建立医院并非完全废弃的认知',
-            allowed_clue_levels: ['surface', 'minor'],
-            forbidden_revelations: ['ten_years_truth', 'real_killer_identity'],
-          },
-          {
-            stage_id: 'investigation',
-            name: '调查线索',
-            purpose: '收集旧案相关证据',
-            allowed_clue_levels: ['surface', 'minor', 'medium'],
-            forbidden_revelations: ['real_killer_identity'],
-          },
-          {
-            stage_id: 'confrontation',
-            name: '冲突阶段',
-            purpose: '与隐瞒者产生正面冲突',
-            allowed_clue_levels: ['surface', 'minor', 'medium', 'major'],
-            forbidden_revelations: [],
-          },
-          {
-            stage_id: 'revelation',
-            name: '真相揭露',
-            purpose: '揭露部分真相',
-            allowed_clue_levels: ['surface', 'minor', 'medium', 'major', 'truth'],
-            forbidden_revelations: [],
-          },
-        ],
-      },
-    ]
-
-    characterArcs.value = [
-      {
-        arc_id: 'arc_char_linzhou',
-        character_id: 'char_linzho',
-        character_name: '林舟',
-        identity: '调查记者',
-        core_desire: '找回童年记忆',
-        psychological_wound: '童年目睹死亡却失忆',
-        fear: '真相可能无法接受',
-        lie: '我只是想了解医院历史',
-        current_stage_index: 0,
-        psychological_stages: [
-          {
-            stage_id: 'denial',
-            stage_name: '否认',
-            direction: 'growth',
-            description: '拒绝承认自己与旧医院有任何联系',
-            required_experiences: ['看到医院照片', '触发零星记忆'],
-          },
-          {
-            stage_id: 'confusion',
-            stage_name: '困惑',
-            direction: 'growth',
-            description: '开始怀疑自己的记忆，但无法确定真相',
-            required_experiences: ['找到旧物品', '听到传闻'],
-          },
-          {
-            stage_id: 'acceptance',
-            stage_name: '接受',
-            direction: 'growth',
-            description: '逐渐接受过去的真相',
-            required_experiences: ['找到证据', '面对知情人'],
-          },
-        ],
-        reflection_points: [],
-      },
-    ]
+  const asArray = (value, key) => {
+    if (Array.isArray(value)) return value
+    if (value && Array.isArray(value[key])) return value[key]
+    return []
   }
 
-  function saveWorld() {
-    // 模拟保存
-    console.log('Saving world:', {
-      worldId: worldId.value,
-      worldBible: worldBible.value,
-      characters: characters.value,
-      locations: locations.value,
-      clues: clues.value,
-      plotArcs: plotArcs.value,
+  const normalizeCharacters = (value) => asArray(value, 'characters').map((char, index) => {
+    const characterId = char.character_id || char.id || `char_${index + 1}`
+    return {
+      ...char,
+      character_id: characterId,
+      id: char.id || characterId,
+      traits: char.traits || char.personality_traits || char.personality?.traits || [],
+      goals: char.goals || (char.goal ? { short_term: char.goal, long_term: char.goal } : { short_term: '', long_term: '' }),
+      initial_location: char.initial_location || char.location_id || '',
+    }
+  })
+
+  const normalizeLocations = (value) => asArray(value, 'locations').map((location, index) => {
+    const locationId = location.location_id || location.id || `location_${index + 1}`
+    return {
+      ...location,
+      location_id: locationId,
+      id: location.id || locationId,
+      connected_to: location.connected_to || [],
+      objects: location.objects || [],
+    }
+  })
+
+  const normalizeClues = (value) => asArray(value, 'clues').map((clue, index) => {
+    const clueId = clue.clue_id || clue.id || `clue_${index + 1}`
+    return {
+      ...clue,
+      clue_id: clueId,
+      id: clue.id || clueId,
+      name: clue.name || clue.title || clueId,
+      level: clue.level || clue.truth_level || 'minor',
+      discover_routes: clue.discover_routes || [],
+    }
+  })
+
+  const normalizePlotArcs = (value) => asArray(value, 'arcs')
+  const normalizeCharacterArcs = (value) => asArray(value, 'arcs')
+
+  function applyWorldPayload(payload, fallbackId = '') {
+    const bible = payload?.world_bible || {}
+    worldId.value = payload?.id || bible.world_id || fallbackId
+    worldBible.value = {
+      ...bible,
+      world_id: bible.world_id || payload?.id || fallbackId,
+      rules: bible.rules || [],
+      themes: bible.themes || [],
+    }
+    characters.value = normalizeCharacters(payload?.characters)
+    locations.value = normalizeLocations(payload?.map)
+    clues.value = normalizeClues(payload?.clues)
+    plotArcs.value = normalizePlotArcs(payload?.plot_arcs)
+    characterArcs.value = normalizeCharacterArcs(payload?.character_arcs)
+  }
+
+  function clearWorld() {
+    worldId.value = ''
+    worldBible.value = null
+    characters.value = []
+    locations.value = []
+    clues.value = []
+    plotArcs.value = []
+    characterArcs.value = []
+  }
+
+  async function loadWorld(id) {
+    if (!id) {
+      clearWorld()
+      return null
+    }
+
+    isLoading.value = true
+    loadError.value = ''
+    try {
+      const response = await fetch(`http://localhost:8421/api/worlds/${id}`)
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.detail || data?.message || '加载世界失败')
+      }
+      applyWorldPayload(data, id)
+      return data
+    } catch (error) {
+      loadError.value = error?.message || '加载世界失败'
+      clearWorld()
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function saveWorld() {
+    const currentWorldId = worldId.value || worldBible.value?.world_id
+    if (!currentWorldId) {
+      throw new Error('请先选择一个世界')
+    }
+    const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        world_bible: worldBible.value || {},
+        characters: characters.value,
+        map: locations.value,
+        clues: clues.value,
+        plot_arcs: plotArcs.value,
+        character_arcs: characterArcs.value,
+      }),
     })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(data?.detail || data?.message || '保存世界失败')
+    }
+    return data
   }
 
   function addCharacter(char) {
@@ -331,6 +261,8 @@ export const useWorldStore = defineStore('world', () => {
     clues,
     plotArcs,
     characterArcs,
+    isLoading,
+    loadError,
 
     // computed
     completeness,

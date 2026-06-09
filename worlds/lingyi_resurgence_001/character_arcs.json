@@ -1,0 +1,38 @@
+{
+  "arcs": [
+    {
+      "arc_id": "char_arc_shen_mo",
+      "character_id": "char_shen_mo",
+      "character_name": "沈默",
+      "identity": "前户籍档案员 / 异常事件追查者",
+      "core_desire": "证明母亲存在过，并保住自己的身份",
+      "psychological_wound": "最亲近的人被世界抹除，而他是唯一还记得的人",
+      "fear": "自己的记忆只是异常伪造的诱饵",
+      "lie": "我只是想查清母亲的事，不会卷入更大的灾难",
+      "current_stage_index": 0,
+      "psychological_stages": [
+        {"stage_id": "denial", "stage_name": "否认", "direction": "growth", "description": "坚持用普通档案逻辑解释异常", "required_experiences": ["发现缺页户籍册", "看见照片变模糊"]},
+        {"stage_id": "obsession", "stage_name": "执念", "direction": "fall", "description": "为了证明母亲存在，不惜接近雾灯", "required_experiences": ["收到母亲语音", "陈屿证词崩溃"]},
+        {"stage_id": "choice", "stage_name": "选择", "direction": "growth", "description": "在救一个人和保留证据之间作出选择", "required_experiences": ["雾灯判定启动", "罗青透露封存失败"]}
+      ],
+      "reflection_points": []
+    },
+    {
+      "arc_id": "char_arc_luo_qing",
+      "character_id": "char_luo_qing",
+      "character_name": "罗青",
+      "identity": "夜巡局外勤处理员",
+      "core_desire": "阻止异常扩散并让幸存者少知道一点",
+      "psychological_wound": "曾经的封存失败让她习惯用牺牲换秩序",
+      "fear": "自己当年的选择其实没有救下任何人",
+      "lie": "隐瞒真相是保护普通人的唯一方式",
+      "current_stage_index": 0,
+      "psychological_stages": [
+        {"stage_id": "control", "stage_name": "控制", "direction": "fall", "description": "试图把沈默纳入夜巡局处置流程", "required_experiences": ["带沈默进入安全屋"]},
+        {"stage_id": "crack", "stage_name": "裂缝", "direction": "growth", "description": "发现沈默的线索可能弥补旧案失败", "required_experiences": ["看到无法复印的户籍纸"]},
+        {"stage_id": "confession", "stage_name": "坦白", "direction": "growth", "description": "承认封存失败并共同制定新方案", "required_experiences": ["失败封存记录曝光"]}
+      ],
+      "reflection_points": []
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "arcs": [
+    {
+      "arc_id": "arc_fog_lamp_case",
+      "name": "雾灯判定案",
+      "status": "active",
+      "current_stage": "setup",
+      "progress": 0,
+      "stages": [
+        {
+          "stage_id": "setup",
+          "name": "异常显形",
+          "purpose": "让主角和读者确认雾灯不是都市传说，而是会删除存在记录的真实异常。",
+          "allowed_clue_levels": ["surface", "minor"],
+          "forbidden_revelations": ["母亲语音来源", "夜巡局失败封存真相"]
+        },
+        {
+          "stage_id": "investigation",
+          "name": "规则试探",
+          "purpose": "通过订单、监控、户籍纸测试雾灯的触发条件。",
+          "allowed_clue_levels": ["surface", "minor", "medium"],
+          "forbidden_revelations": ["完整制衡方法"]
+        },
+        {
+          "stage_id": "confrontation",
+          "name": "封存失败",
+          "purpose": "夜巡局介入并暴露过去行动失败，主角必须选择是否继续追查。",
+          "allowed_clue_levels": ["minor", "medium", "major"],
+          "forbidden_revelations": ["最终真相"]
+        },
+        {
+          "stage_id": "revelation",
+          "name": "第一夜真相",
+          "purpose": "揭示母亲语音与地下档案室相关，但保留更大复苏危机。",
+          "allowed_clue_levels": ["medium", "major", "truth"],
+          "forbidden_revelations": []
+        }
+      ]
+    },
+    {
+      "arc_id": "arc_erased_identity",
+      "name": "被抹除的身份",
+      "status": "active",
+      "current_stage": "setup",
+      "progress": 0,
+      "stages": [
+        {
+          "stage_id": "setup",
+          "name": "证明存在",
+          "purpose": "沈默寻找母亲存在过的证据。",
+          "allowed_clue_levels": ["surface", "minor"],
+          "forbidden_revelations": ["母亲语音来源"]
+        },
+        {
+          "stage_id": "investigation",
+          "name": "档案缺页",
+          "purpose": "发现空户籍与雾灯事件有直接关联。",
+          "allowed_clue_levels": ["minor", "medium", "major"],
+          "forbidden_revelations": []
+        },
+        {
+          "stage_id": "revelation",
+          "name": "声音的位置",
+          "purpose": "定位母亲语音背景，指向地下档案室。",
+          "allowed_clue_levels": ["major", "truth"],
+          "forbidden_revelations": []
+        }
+      ]
+    },
+    {
+      "arc_id": "arc_night_bureau_secret",
+      "name": "夜巡局隐瞒记录",
+      "status": "active",
+      "current_stage": "setup",
+      "progress": 0,
+      "stages": [
+        {
+          "stage_id": "setup",
+          "name": "官方接触",
+          "purpose": "罗青出现并阻止沈默继续调查。",
+          "allowed_clue_levels": ["surface", "minor"],
+          "forbidden_revelations": ["封存行动牺牲名单"]
+        },
+        {
+          "stage_id": "confrontation",
+          "name": "信任破裂",
+          "purpose": "沈默发现夜巡局隐瞒失败封存记录。",
+          "allowed_clue_levels": ["medium", "major"],
+          "forbidden_revelations": []
+        }
+      ]
+    }
+  ]
+}

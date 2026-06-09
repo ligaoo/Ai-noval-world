@@ -290,6 +290,10 @@ const generateCharacter = async () => {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 20000)
   try {
+    const currentWorldId = worldStore.worldBible?.world_id || worldStore.worldId
+    if (!currentWorldId) {
+      throw new Error('请先在世界总览中选择一个世界')
+    }
     const response = await fetch('http://localhost:8421/api/generate/characters', {
       method: 'POST',
       headers: {
@@ -297,9 +301,11 @@ const generateCharacter = async () => {
       },
       signal: controller.signal,
       body: JSON.stringify({
-        world_id: worldStore.worldBible?.world_id || worldStore.worldId || 'dark_city_001',
+        world_id: currentWorldId,
         count: params.value.count,
-        genre: 'horror',
+        genre: worldStore.worldBible?.genre || worldStore.worldBible?.genre_id || '',
+        character_type: params.value.character_type,
+        arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
       }),
     })
 
@@ -332,10 +338,10 @@ const generateCharacter = async () => {
     toast.add({
       severity: 'success',
       summary: '生成完成',
-      detail: `已生成 ${candidates.length} 个角色候选（LLM）`,
+      detail: `已生成 ${candidates.length} 个角色候选`,
       life: 3000
     })
-    generatorStore.addLog(`LLM返回 ${candidates.length} 个角色候选`)
+    generatorStore.addLog(`返回 ${candidates.length} 个角色候选`)
   } catch (error) {
     console.error('[CharacterGenerator] generate failed:', error)
     const isTimeout = error?.name === 'AbortError'

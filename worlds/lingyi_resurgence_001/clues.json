@@ -1,0 +1,87 @@
+{
+  "clues": [
+    {
+      "id": "clue_fog_lamp_time",
+      "clue_id": "clue_fog_lamp_time",
+      "name": "固定的一点十七分",
+      "content": "雾灯只在凌晨一点十七分完整亮起，且每次亮起后监控都会缺失七秒。",
+      "level": "minor",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_fog_lamp_case",
+      "allowed_stages": ["setup", "investigation"],
+      "importance": 70,
+      "discover_routes": [
+        {"route_id": "route_lamp_direct_observe", "action_type": "observe", "target": "white_fog_lamp", "location_id": "fog_lamp_crossing", "required_skill": "observation", "difficulty": 25, "result": "沈默确认雾灯会在一点十七分由暖黄变成雾白。", "result_text": "沈默确认雾灯会在一点十七分由暖黄变成雾白。"},
+        {"route_id": "route_lamp_camera", "action_type": "inspect", "target": "blurred_crosswalk_camera", "location_id": "fog_lamp_crossing", "required_skill": "observation", "difficulty": 35, "result": "监控日志显示每天凌晨一点十七分都会短暂丢帧。", "result_text": "监控日志显示每天凌晨一点十七分都会短暂丢帧。"},
+        {"route_id": "route_lamp_ask_chen_at_crossing", "action_type": "ask", "target": "char_chen_yu", "location_id": "fog_lamp_crossing", "required_skill": "social", "difficulty": 40, "result": "陈屿承认他载客经过路口时，车载时钟停在一点十七分。", "result_text": "陈屿承认他载客经过路口时，车载时钟停在一点十七分。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 8, "progress": 10, "conflict": 2}}
+    },
+    {
+      "id": "clue_erased_passenger_order",
+      "clue_id": "clue_erased_passenger_order",
+      "name": "被抹除的乘客订单",
+      "content": "陈屿昨晚的网约车订单只剩金额，没有乘客姓名、电话和上车地址。",
+      "level": "medium",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_fog_lamp_case",
+      "allowed_stages": ["setup", "investigation"],
+      "importance": 78,
+      "discover_routes": [
+        {"route_id": "route_ask_chen_order", "action_type": "ask", "target": "char_chen_yu", "location_id": "fog_lamp_crossing", "required_skill": "social", "difficulty": 30, "result": "陈屿展示订单页面：只有金额，没有乘客姓名、电话和上车地址。", "result_text": "陈屿展示订单页面：只有金额，没有乘客姓名、电话和上车地址。"},
+        {"route_id": "route_inspect_order_screen", "action_type": "inspect", "target": "erased_order_screen", "location_id": "closed_bus_stop", "required_skill": "observation", "difficulty": 35, "result": "订单页面保留金额，却抹掉了全部乘客身份信息。", "result_text": "订单页面保留金额，却抹掉了全部乘客身份信息。"},
+        {"route_id": "route_check_recorder_card", "action_type": "search", "target": "driver_recorder_card", "location_id": "closed_bus_stop", "required_skill": "observation", "difficulty": 40, "result": "记录卡里有三段空白音轨，时间戳与订单金额对应。", "result_text": "记录卡里有三段空白音轨，时间戳与订单金额对应。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 9, "progress": 10, "conflict": 4}}
+    },
+    {
+      "id": "clue_registry_page_fades",
+      "clue_id": "clue_registry_page_fades",
+      "name": "会褪色的户籍页",
+      "content": "旧户籍纸上的名字一旦暴露在雾灯光线里，就会从墨迹边缘开始变淡。",
+      "level": "medium",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_erased_identity",
+      "allowed_stages": ["setup", "investigation", "confrontation"],
+      "importance": 88,
+      "discover_routes": [
+        {"route_id": "route_check_carried_registry", "action_type": "inspect", "target": "registry_page_carried", "location_id": "fog_lamp_crossing", "required_skill": "observation", "difficulty": 30, "result": "沈默发现随身户籍纸的墨迹边缘变湿、发灰，像正在被稀释。", "result_text": "沈默发现随身户籍纸的墨迹边缘变湿、发灰，像正在被稀释。"},
+        {"route_id": "route_test_registry_page", "action_type": "inspect", "target": "unprintable_registry_page", "location_id": "archive_basement", "required_skill": "logic", "difficulty": 45, "result": "纸页靠近路口照片时，姓名笔画开始消失。", "result_text": "纸页靠近路口照片时，姓名笔画开始消失。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 10, "progress": 10, "conflict": 5}}
+    },
+    {
+      "id": "clue_bureau_failed_seal",
+      "clue_id": "clue_bureau_failed_seal",
+      "name": "夜巡局失败封存记录",
+      "content": "夜巡局曾尝试拆除雾灯，但负责行动的三人随后从局内名单和合影中消失。",
+      "level": "major",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_night_bureau_secret",
+      "allowed_stages": ["confrontation"],
+      "importance": 90,
+      "discover_routes": [
+        {"route_id": "route_wall_map_red_line", "action_type": "inspect", "target": "incident_wall_map", "location_id": "night_bureau_safehouse", "required_skill": "observation", "difficulty": 40, "result": "墙图背面贴着三张只剩衣服轮廓的合影。", "result_text": "墙图背面贴着三张只剩衣服轮廓的合影。"},
+        {"route_id": "route_case_file_l017", "action_type": "inspect", "target": "case_file_l017", "location_id": "night_bureau_safehouse", "required_skill": "logic", "difficulty": 45, "result": "L-017 档案册记录了拆除行动，但参与者姓名已经变成空白。", "result_text": "L-017 档案册记录了拆除行动，但参与者姓名已经变成空白。"},
+        {"route_id": "route_ask_luo_qing", "action_type": "ask", "target": "char_luo_qing", "location_id": "night_bureau_safehouse", "required_skill": "social", "difficulty": 55, "result": "罗青承认封存行动失败，且她是唯一保留部分记忆的人。", "result_text": "罗青承认封存行动失败，且她是唯一保留部分记忆的人。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 8, "progress": 7, "conflict": 8}}
+    },
+    {
+      "id": "clue_mother_voice_background",
+      "clue_id": "clue_mother_voice_background",
+      "name": "母亲语音里的地下广播",
+      "content": "沈默收到的语音背景里有地下档案室广播的电流声，说明语音并非来自普通手机环境。",
+      "level": "major",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_erased_identity",
+      "allowed_stages": ["investigation", "revelation"],
+      "importance": 100,
+      "discover_routes": [
+        {"route_id": "route_listen_phone_voice", "action_type": "inspect", "target": "phone_voice_message", "location_id": "fog_lamp_crossing", "required_skill": "observation", "difficulty": 35, "result": "沈默听见母亲语音背景里有熟悉的地下广播电流声。", "result_text": "沈默听见母亲语音背景里有熟悉的地下广播电流声。"},
+        {"route_id": "route_compare_broadcast", "action_type": "inspect", "target": "basement_broadcast", "location_id": "archive_basement", "required_skill": "logic", "difficulty": 50, "result": "两段电流噪声频谱完全一致，母亲的声音很可能来自地下档案室。", "result_text": "两段电流噪声频谱完全一致，母亲的声音很可能来自地下档案室。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 12, "progress": 12, "conflict": 8}}
+    }
+  ]
+}

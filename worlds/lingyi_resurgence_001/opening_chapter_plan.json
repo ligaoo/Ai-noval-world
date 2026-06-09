@@ -1,0 +1,16 @@
+{
+  "protagonist_goal": "沈默要在第一夜确认雾灯异常与母亲被抹除有关，并在不进入灯光范围的前提下取得至少两个可验证线索。",
+  "initial_location": "fog_lamp_crossing",
+  "selected_clues": ["clue_fog_lamp_time", "clue_erased_passenger_order", "clue_registry_page_fades"],
+  "opening_sequence": [
+    "沈默带着无法复印的户籍纸来到雾灯路口，并避开直射灯光。",
+    "沈默观察雾灯、监控探头和潮湿斑马线，确认一点十七分是关键时间。",
+    "陈屿在路口附近出现，展示被抹除乘客信息的订单页面。",
+    "雾灯完整亮起七秒，母亲语音提醒沈默不要站进光里。",
+    "罗青从夜巡局安全屋方向出现，制止沈默继续试探。",
+    "章节结尾：未知号码提示第二盏灯在停运公交站。"
+  ],
+  "do_not_enter_locations_in_chapter_one": ["archive_basement"],
+  "mention_only_locations": ["closed_bus_stop"],
+  "chapter_one_allowed_locations": ["fog_lamp_crossing", "night_bureau_safehouse"]
+}

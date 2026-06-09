@@ -212,7 +212,7 @@
             <PInputText
               v-model="newLocation.location_id"
               class="w-full input-dark"
-              placeholder="例如：hospital_lobby"
+              placeholder="例如：location_main"
             />
           </div>
           <div>
@@ -220,7 +220,7 @@
             <PInputText
               v-model="newLocation.name"
               class="w-full input-dark"
-              placeholder="例如：医院大厅"
+              placeholder="例如：主要场景"
             />
           </div>
         </div>

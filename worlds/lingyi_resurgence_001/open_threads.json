@@ -1,0 +1,59 @@
+{
+  "threads": [
+    {
+      "id": "thread_mother_exists",
+      "title": "沈默母亲是否还存在",
+      "thread_type": "character_mystery",
+      "motif": "存在证明",
+      "status": "open",
+      "importance": 10,
+      "related_arc_id": "arc_erased_identity",
+      "introduced_chapter": 1,
+      "first_progress_condition": "发现随身户籍纸在雾灯附近褪色，且母亲语音能在关键时刻干预。"
+    },
+    {
+      "id": "thread_fog_lamp_rule",
+      "title": "雾灯判定的完整规则",
+      "thread_type": "supernatural_rule",
+      "motif": "雾白灯光 / 七秒判定",
+      "status": "open",
+      "importance": 9,
+      "related_arc_id": "arc_fog_lamp_case",
+      "introduced_chapter": 1,
+      "first_progress_condition": "确认一点十七分亮灯、监控缺帧和订单抹除之间有关联。"
+    },
+    {
+      "id": "thread_second_lamp",
+      "title": "第二盏灯在哪里以及意味着什么",
+      "thread_type": "chapter_hook",
+      "motif": "扩散的异常",
+      "status": "open",
+      "importance": 9,
+      "related_arc_id": "arc_fog_lamp_case",
+      "introduced_chapter": 1,
+      "first_progress_condition": "结尾收到未知号码提示：第二盏灯在停运公交站。"
+    },
+    {
+      "id": "thread_black_bell",
+      "title": "罗青封存箱里的黑铃",
+      "thread_type": "institution_secret",
+      "motif": "用异常制衡异常的代价",
+      "status": "open",
+      "importance": 8,
+      "related_arc_id": "arc_night_bureau_secret",
+      "introduced_chapter": 1,
+      "first_progress_condition": "安全屋中出现黑铃封存箱，但不解释用途。"
+    },
+    {
+      "id": "thread_missing_passengers",
+      "title": "陈屿车上三名乘客去了哪里",
+      "thread_type": "case_mystery",
+      "motif": "订单空白 / 副驾驶安全扣",
+      "status": "open",
+      "importance": 7,
+      "related_arc_id": "arc_fog_lamp_case",
+      "introduced_chapter": 1,
+      "first_progress_condition": "陈屿展示只剩金额的订单，并描述消失乘客。"
+    }
+  ]
+}

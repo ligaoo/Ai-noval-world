@@ -68,10 +68,9 @@
               v-model="params.location_id"
               class="w-full bg-noir-800 border border-noir-600 rounded-lg p-3 text-white focus:outline-none focus:border-neon-purple">
               <option value="">选择地点</option>
-              <option value="old_hospital_gate">医院大门</option>
-              <option value="hospital_lobby">医院大厅</option>
-              <option value="old_street_shop">旧街口小卖部</option>
-              <option value="police_station">警察局</option>
+              <option v-for="location in locationOptions" :key="location.value" :value="location.value">
+                {{ location.label }}
+              </option>
             </select>
           </div>
 
@@ -222,77 +221,48 @@ const params = ref({
   npc_type: 'witness_npc',
   narrative_function: 'witness',
   count: 3,
-  location_id: 'old_hospital_gate',
+  location_id: '',
   max_clue_level: 'medium'
 })
 
 const npcCandidates = computed(() => generatorStore.npcCandidates)
 const isGenerating = computed(() => generatorStore.isGenerating)
+const locationOptions = computed(() => (worldStore.locations || []).map(location => ({
+  value: location.location_id || location.id,
+  label: location.name || location.location_id || location.id,
+})).filter(location => location.value))
 
 const generateNPC = async () => {
   generatorStore.setGenerating(true)
-  
-  setTimeout(() => {
-    const mockCandidates = generateMockNPCs()
-    generatorStore.addCandidates(mockCandidates)
-    generatorStore.setGenerating(false)
-  }, 1500)
-}
-
-const generateMockNPCs = () => {
-  const npcData = {
-    witness_npc: {
-      names: ['赵婶', '老王', '小李', '陈阿姨'],
-      roles: ['小卖部老板', '门卫', '清洁工', '街坊'],
-      personalities: ['话多、谨慎、怕惹事', '沉默、观察仔细', '八卦、消息灵通', '健忘但关键时候能想起重要事']
-    },
-    clue_holder_npc: {
-      names: ['档案管理员', '老医生', '护士', '前任员工'],
-      roles: ['医院档案管理员', '退休医生', '夜班护士', '清洁工'],
-      personalities: ['严谨、有条理', '和蔼但有秘密', '胆小但善良', '看起来凶但热心']
-    },
-    obstructing_npc: {
-      names: ['保安队长', '医院主任', '律师', '神秘人'],
-      roles: ['安保负责人', '行政主任', '医院律师', '不速之客'],
-      personalities: ['强势、按规矩办事', '老练、滴水不漏', '专业、谨慎', '神秘、难以接近']
+  try {
+    const currentWorldId = worldStore.worldBible?.world_id || worldStore.worldId
+    if (!currentWorldId) {
+      throw new Error('请先在世界总览中选择一个世界')
     }
-  }
-
-  const typeData = npcData[params.value.npc_type] || npcData.witness_npc
-  const candidates = []
-
-  for (let i = 0; i < params.value.count; i++) {
-    const knows = []
-    const numFacts = Math.floor(Math.random() * 3) + 1
-    
-    const factTemplates = [
-      { content: '记得那天晚上有个年轻人来过医院', clue_level: 'surface' },
-      { content: '听说十年前医院出过事，但具体不清楚', clue_level: 'minor' },
-      { content: '看到大门的锁好像最近被换过', clue_level: 'surface' },
-      { content: '半夜偶尔能听到奇怪的声音', clue_level: 'medium' }
-    ]
-
-    for (let j = 0; j < numFacts && j < factTemplates.length; j++) {
-      knows.push(factTemplates[j])
-    }
-
-    candidates.push({
-      candidate_type: 'npc',
-      name: typeData.names[Math.floor(Math.random() * typeData.names.length)],
-      type: params.value.npc_type,
-      persistence: 'recurring_npc',
-      role: typeData.roles[Math.floor(Math.random() * typeData.roles.length)],
-      location_id: params.value.location_id,
-      narrative_function: params.value.narrative_function,
-      personality: typeData.personalities[Math.floor(Math.random() * typeData.personalities.length)],
-      knows: knows,
-      forbidden_knowledge: ['不能知道核心真相', '不能知道主角的过去'],
-      first_available_topics: ['医院近况', '最近访客', '往事回忆'].slice(0, Math.floor(Math.random() * 2) + 2),
-      generator: 'NPCGenerator'
+    const response = await fetch('http://localhost:8421/api/generate/npcs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        world_id: currentWorldId,
+        count: params.value.count,
+        npc_type: params.value.npc_type,
+        location_id: params.value.location_id,
+        narrative_function: params.value.narrative_function,
+        max_clue_level: params.value.max_clue_level,
+      }),
     })
+    const data = await response.json().catch(() => null)
+    if (!response.ok || !data?.success || !Array.isArray(data.candidates)) {
+      throw new Error(data?.detail || data?.message || 'NPC生成失败')
+    }
+    generatorStore.addCandidates(data.candidates)
+    generatorStore.addLog(`返回 ${data.candidates.length} 个 NPC 候选`)
+  } catch (error) {
+    generatorStore.addLog(`NPC生成失败: ${error?.message || 'unknown error'}`)
+    alert(`NPC生成失败：${error?.message || '请检查后端服务'}`)
+  } finally {
+    generatorStore.setGenerating(false)
   }
-
-  return candidates
 }
 
 const validateNPC = (candidate) => {

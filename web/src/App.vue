@@ -47,17 +47,10 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
 import { useWorldStore } from '@/stores/world'
 import { Home, Users, Users2, Map, Search, GitBranch, UserCheck, CheckCircle2, Wand2 } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
-
-onMounted(() => {
-  if (worldStore.characters.length === 0) {
-    worldStore.loadWorld('dark_city_001')
-  }
-})
 
 const generatorNavItems = [
   {

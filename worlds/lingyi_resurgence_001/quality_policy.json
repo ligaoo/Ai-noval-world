@@ -1,0 +1,34 @@
+{
+  "min_characters": 3,
+  "min_locations": 4,
+  "min_clues": 5,
+  "quality_threshold": 78,
+  "style_focus": ["灵异规则清晰", "现实压迫感", "信息递进", "角色代价", "章节钩子", "存在抹除恐怖"],
+  "avoid": [
+    "直接套用已有作品专有设定",
+    "用万能鬼怪解释所有异常",
+    "第一章过早讲清全部规则",
+    "角色无代价使用异常能力",
+    "把夜巡局写成无所不能的官方外挂",
+    "让母亲实体过早登场",
+    "第一章进入地下档案室并解释核心真相"
+  ],
+  "must_have": [
+    "每个异常表现都要服务于规则",
+    "线索发现要推动剧情阶段",
+    "恐怖氛围来自细节和后果",
+    "保持原创地名、机构和角色",
+    "第一章至少发现 clue_fog_lamp_time 与 clue_erased_passenger_order",
+    "结尾保留 second_lamp 钩子"
+  ],
+  "chapter_one_policy": {
+    "allowed_locations": ["fog_lamp_crossing", "night_bureau_safehouse"],
+    "mention_only_locations": ["closed_bus_stop", "archive_basement"],
+    "must_discover_clues": ["clue_fog_lamp_time", "clue_erased_passenger_order", "clue_registry_page_fades"],
+    "suspect_only_clues": ["clue_mother_voice_background", "clue_bureau_failed_seal"],
+    "forbidden_full_explanations": ["雾灯完整判定机制", "黑铃用途", "母亲真实状态", "夜巡局拆灯行动全貌"]
+  },
+  "faithfulness_whitelist_keywords": [
+    "档案", "纸质档案", "档案系统", "档案册", "户籍纸", "户籍册", "地图", "旧城区地图", "墙图", "门禁", "密码", "录音", "广播", "订单", "监控", "合影", "照片"
+  ]
+}

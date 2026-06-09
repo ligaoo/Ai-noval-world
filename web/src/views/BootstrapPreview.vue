@@ -258,8 +258,8 @@ import { ref, computed } from 'vue'
 const API = 'http://localhost:8421'
 
 const form = ref({
-  user_seed: '废弃医院，午夜出现五楼，主角调查失踪妹妹',
-  target_genre: 'horror_suspense',
+  user_seed: '',
+  target_genre: 'generic',
   target_words: 100000,
   world_id: '',
 })

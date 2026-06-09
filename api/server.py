@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import asyncio
 import threading
+import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Windows 编码修复：强制使用 UTF-8，避免替换 stdout/stderr 导致 uvicorn logging 持有已关闭 stream
 if sys.platform == "win32":
@@ -40,6 +42,267 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
 # 模拟状态存储
 running_simulations: Dict[str, Dict] = {}
+BOOTSTRAPS_DIR = OUTPUTS_DIR / "bootstraps"
+WORLD_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _safe_world_dir(world_id: str, must_exist: bool = True) -> Path:
+    if not world_id or not WORLD_ID_PATTERN.fullmatch(world_id):
+        raise HTTPException(status_code=400, detail="World ID 只能包含字母、数字、下划线和连字符")
+    world_dir = WORLDS_DIR / world_id
+    if must_exist and not world_dir.exists():
+        raise HTTPException(status_code=404, detail="World not found")
+    return world_dir
+
+
+def _read_json(path: Path, default: Any = None) -> Any:
+    if not path.exists():
+        return default
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _as_list(value: Any, key: str) -> List[Dict]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        inner = value.get(key)
+        return inner if isinstance(inner, list) else []
+    return []
+
+
+def _stable_id(prefix: str, value: str, index: int = 0) -> str:
+    raw = re.sub(r"[^A-Za-z0-9_一-鿿-]+", "_", value or "item").strip("_")
+    if not raw:
+        raw = f"item_{index + 1}"
+    return f"{prefix}_{raw[:32]}_{index + 1}"
+
+
+def _normalize_character(character: Dict, index: int = 0) -> Dict:
+    char_id = character.get("character_id") or character.get("id") or _stable_id("char", character.get("name", ""), index)
+    traits = character.get("traits") or character.get("personality_traits") or character.get("personality", {}).get("traits") or []
+    goals = character.get("goals") or {}
+    if isinstance(character.get("goal"), str) and not goals:
+        goals = {"short_term": character.get("goal", ""), "long_term": character.get("goal", "")}
+    return {
+        **character,
+        "character_id": char_id,
+        "id": character.get("id") or char_id,
+        "traits": traits,
+        "goals": goals,
+        "initial_location": character.get("initial_location") or character.get("location_id") or "",
+    }
+
+
+def _normalize_location(location: Dict, index: int = 0) -> Dict:
+    loc_id = location.get("location_id") or location.get("id") or _stable_id("loc", location.get("name", ""), index)
+    return {**location, "location_id": loc_id, "id": location.get("id") or loc_id}
+
+
+def _normalize_clue(clue: Dict, index: int = 0) -> Dict:
+    clue_id = clue.get("clue_id") or clue.get("id") or _stable_id("clue", clue.get("name") or clue.get("title", ""), index)
+    return {
+        **clue,
+        "clue_id": clue_id,
+        "id": clue.get("id") or clue_id,
+        "name": clue.get("name") or clue.get("title") or clue_id,
+        "level": clue.get("level") or clue.get("truth_level") or "minor",
+    }
+
+
+def _load_world_payload(world_id: str) -> Dict:
+    world_dir = _safe_world_dir(world_id)
+    data = {"id": world_id}
+    for name in [
+        "world_bible",
+        "characters",
+        "map",
+        "clues",
+        "chapter_goal",
+        "quality_policy",
+        "plot_arcs",
+        "character_arcs",
+        "truth_chain",
+        "evidence_graph",
+        "open_threads",
+        "writer_story_anchors",
+        "opening_chapter_plan",
+        "bootstrap_manifest",
+        "bootstrap_result",
+    ]:
+        value = _read_json(world_dir / f"{name}.json")
+        if value is not None:
+            data[name] = value
+    return data
+
+
+def _world_summary(payload: Dict) -> Dict:
+    return {
+        "characters": len(_as_list(payload.get("characters"), "characters")),
+        "locations": len(_as_list(payload.get("map"), "locations")),
+        "clues": len(_as_list(payload.get("clues"), "clues")),
+        "plot_arcs": len(_as_list(payload.get("plot_arcs"), "arcs")),
+    }
+
+
+def _save_world_payload(world_id: str, payload: Dict) -> Dict:
+    world_dir = _safe_world_dir(world_id, must_exist=False)
+    world_dir.mkdir(parents=True, exist_ok=True)
+
+    if "world_bible" in payload:
+        bible = dict(payload.get("world_bible") or {})
+        bible["world_id"] = bible.get("world_id") or world_id
+        _write_json(world_dir / "world_bible.json", bible)
+    if "characters" in payload:
+        chars = [_normalize_character(c, i) for i, c in enumerate(_as_list(payload.get("characters"), "characters"))]
+        _write_json(world_dir / "characters.json", {"characters": chars})
+    if "map" in payload:
+        locations = [_normalize_location(l, i) for i, l in enumerate(_as_list(payload.get("map"), "locations"))]
+        _write_json(world_dir / "map.json", {"locations": locations})
+    if "clues" in payload:
+        clues = [_normalize_clue(c, i) for i, c in enumerate(_as_list(payload.get("clues"), "clues"))]
+        _write_json(world_dir / "clues.json", {"clues": clues})
+    if "plot_arcs" in payload:
+        _write_json(world_dir / "plot_arcs.json", {"arcs": _as_list(payload.get("plot_arcs"), "arcs")})
+    if "character_arcs" in payload:
+        _write_json(world_dir / "character_arcs.json", {"arcs": _as_list(payload.get("character_arcs"), "arcs")})
+    for name in ["chapter_goal", "quality_policy", "truth_chain", "evidence_graph", "open_threads", "writer_story_anchors", "opening_chapter_plan", "bootstrap_manifest", "bootstrap_result"]:
+        if name in payload:
+            _write_json(world_dir / f"{name}.json", payload.get(name) or {})
+
+    return _load_world_payload(world_id)
+
+
+def _bootstrap_path(bootstrap_id: str) -> Path:
+    if not re.fullmatch(r"boot_[A-Za-z0-9_-]+", bootstrap_id or ""):
+        raise HTTPException(status_code=400, detail="Invalid bootstrap ID")
+    return BOOTSTRAPS_DIR / f"{bootstrap_id}.json"
+
+
+def _build_generated_character(world: Dict, index: int, role: str = "supporting") -> Dict:
+    bible = world.get("world_bible") or {}
+    locations = [_normalize_location(l, i) for i, l in enumerate(_as_list(world.get("map"), "locations"))]
+    location = locations[index % len(locations)] if locations else {}
+    genre = bible.get("genre") or bible.get("genre_id") or "通用题材"
+    title = bible.get("title") or world.get("id") or "当前世界"
+    name = f"{title}角色{index + 1}"
+    return {
+        "character_id": f"char_generated_{int(time.time() * 1000)}_{index}",
+        "name": name,
+        "role": role,
+        "agent_type": "semi_agent_npc" if role == "npc" else "core_agent",
+        "traits": ["与世界规则相关", "可推动剧情"],
+        "goals": {
+            "short_term": f"围绕《{title}》寻找新的行动线索",
+            "long_term": f"在{genre}故事中形成稳定动机",
+        },
+        "skills": {"observation": 60 + index * 3, "social": 50, "logic": 55, "courage": 50},
+        "initial_location": location.get("location_id", ""),
+        "location_id": location.get("location_id", ""),
+        "backstory": f"与{location.get('name', title)}有关的候选角色。",
+    }
+
+
+def _build_generated_clue(world: Dict, index: int, arc_id: str = "", level: str = "minor") -> Dict:
+    bible = world.get("world_bible") or {}
+    locations = [_normalize_location(l, i) for i, l in enumerate(_as_list(world.get("map"), "locations"))]
+    location = locations[index % len(locations)] if locations else {}
+    target = (location.get("objects") or [location.get("name") or "关键场景"])[0]
+    if isinstance(target, dict):
+        target = target.get("object_id") or target.get("name") or "关键物件"
+    name = f"{location.get('name') or bible.get('title') or '世界'}线索{index + 1}"
+    return {
+        "clue_id": f"clue_generated_{int(time.time() * 1000)}_{index}",
+        "name": name,
+        "content": f"这个线索指向《{bible.get('title', '当前世界')}》中的未解问题，需要结合地点和角色动机继续验证。",
+        "level": level,
+        "arc_id": arc_id,
+        "importance": 50 + index * 5,
+        "discover_routes": [
+            {
+                "route_id": f"route_generated_{index}_0",
+                "action_type": "investigate",
+                "target": target,
+                "location_id": location.get("location_id", ""),
+                "difficulty": 45 + index * 5,
+                "result": "发现与当前世界规则一致的异常细节。",
+            }
+        ],
+    }
+
+
+def _build_bootstrap_result(request: Dict) -> Dict:
+    bootstrap_id = f"boot_{int(time.time() * 1000)}"
+    world_id = request.get("world_id") or f"world_{int(time.time() * 1000)}"
+    seed = (request.get("user_seed") or "").strip()
+    target_genre = request.get("target_genre") or "generic"
+    title = seed[:16] if seed else world_id
+    world_bible = {
+        "world_id": world_id,
+        "title": title,
+        "genre": target_genre,
+        "sub_genre": target_genre,
+        "era": "Modern",
+        "tone": "待完善",
+        "themes": [],
+        "rules": [seed] if seed else [],
+    }
+    locations = [
+        {
+            "location_id": "location_start",
+            "id": "location_start",
+            "name": "起点场景",
+            "public_description": seed or "故事开始的位置。",
+            "objects": [],
+            "connected_to": [],
+            "danger_level": 1,
+        }
+    ]
+    characters = [
+        {
+            "character_id": "char_protagonist",
+            "id": "char_protagonist",
+            "name": "主角",
+            "role": "protagonist",
+            "agent_type": "core_agent",
+            "traits": [],
+            "goals": {"short_term": "进入故事并寻找目标", "long_term": "完成主线目标"},
+            "skills": {"observation": 60, "logic": 60, "social": 50, "courage": 50},
+            "initial_location": "location_start",
+        }
+    ]
+    clues = [_build_generated_clue({"world_bible": world_bible, "map": {"locations": locations}}, 0, "main_arc", "minor")]
+    result = {
+        "bootstrap_id": bootstrap_id,
+        "world_id": world_id,
+        "status": "draft",
+        "title": title,
+        "user_seed": seed,
+        "target_words": request.get("target_words"),
+        "world_bible": world_bible,
+        "characters": characters,
+        "map": locations,
+        "clues": clues,
+        "plot_arcs": [{"arc_id": "main_arc", "name": "主线", "status": "active", "current_stage": "setup", "progress": 0, "stages": []}],
+        "character_arcs": [],
+        "chapter_goal": {"goal": "建立故事开端", "pov": "char_protagonist", "target_progress": 100, "tick_limit": 30, "no_progress_limit": 4},
+        "quality_policy": {"min_characters": 1, "min_locations": 1, "min_clues": 1, "quality_threshold": 70},
+        "opening_chapter_plan": {"protagonist_goal": "进入故事并发现第一个异常", "initial_location": "location_start", "selected_clues": [clues[0]["clue_id"]]},
+        "truth_chain": [],
+        "evidence_graph": {},
+        "open_threads": [],
+        "writer_story_anchors": {},
+        "summary": {"characters": len(characters), "locations": len(locations), "clues": len(clues)},
+        "validation": {"passed": True, "issues": [], "warnings": []},
+    }
+    _write_json(_bootstrap_path(bootstrap_id), result)
+    return result
 
 
 class SimulationRequest(BaseModel):
@@ -73,30 +336,16 @@ async def get_worlds():
         for world_dir in WORLDS_DIR.iterdir():
             if world_dir.is_dir():
                 world_info = {"id": world_dir.name}
-                bible_file = world_dir / "world_bible.json"
-                if bible_file.exists():
-                    with open(bible_file, "r", encoding="utf-8") as f:
-                        bible = json.load(f)
-                        world_info["title"] = bible.get("title", world_dir.name)
-                        world_info["genre"] = bible.get("genre_id", "generic")
+                bible = _read_json(world_dir / "world_bible.json", {})
+                world_info["title"] = bible.get("title", world_dir.name)
+                world_info["genre"] = bible.get("genre") or bible.get("genre_id", "generic")
                 worlds.append(world_info)
     return {"worlds": worlds}
 
 
 @app.get("/api/worlds/{world_id}")
 async def get_world(world_id: str):
-    world_dir = WORLDS_DIR / world_id
-    if not world_dir.exists():
-        raise HTTPException(status_code=404, detail="World not found")
-
-    world_data = {"id": world_id}
-    for json_file in ["world_bible", "characters", "map", "clues", "quality_policy"]:
-        file_path = world_dir / f"{json_file}.json"
-        if file_path.exists():
-            with open(file_path, "r", encoding="utf-8") as f:
-                world_data[json_file] = json.load(f)
-
-    return world_data
+    return _load_world_payload(world_id)
 
 
 @app.get("/api/simulations")
@@ -338,6 +587,182 @@ async def get_genre_profile(genre_id: str):
     return {"profile": profile.__dict__}
 
 
+class WorldUpdateRequest(BaseModel):
+    world_bible: Optional[Dict[str, Any]] = None
+    characters: Optional[Any] = None
+    map: Optional[Any] = None
+    clues: Optional[Any] = None
+    plot_arcs: Optional[Any] = None
+    character_arcs: Optional[Any] = None
+    chapter_goal: Optional[Dict[str, Any]] = None
+    quality_policy: Optional[Dict[str, Any]] = None
+
+
+class CharactersUpdateRequest(BaseModel):
+    characters: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class GenerateCharactersRequest(BaseModel):
+    world_id: str
+    count: int = 3
+    genre: str = ""
+    character_type: str = "supporting"
+    arc_id: str = ""
+
+
+class GenerateNPCsRequest(BaseModel):
+    world_id: str
+    count: int = 3
+    npc_type: str = "witness_npc"
+    location_id: str = ""
+    narrative_function: str = "information_source"
+
+
+class GenerateCluesRequest(BaseModel):
+    world_id: str
+    count: int = 3
+    arc_id: str = ""
+    stage: str = ""
+    clue_level: str = "minor"
+    must_have_routes: int = 1
+    allowed_route_types: List[str] = Field(default_factory=list)
+
+
+class BootstrapRequest(BaseModel):
+    user_seed: str = ""
+    target_genre: str = "generic"
+    target_words: Optional[int] = None
+    world_id: Optional[str] = None
+    auto_confirm: bool = False
+
+
+@app.put("/api/worlds/{world_id}")
+async def update_world(world_id: str, request: WorldUpdateRequest):
+    payload = request.model_dump(exclude_none=True)
+    saved = _save_world_payload(world_id, payload)
+    return {"success": True, "world_id": world_id, "summary": _world_summary(saved)}
+
+
+@app.put("/api/worlds/{world_id}/characters")
+async def update_world_characters(world_id: str, request: CharactersUpdateRequest):
+    saved = _save_world_payload(world_id, {"characters": request.characters})
+    return {"success": True, "world_id": world_id, "summary": _world_summary(saved)}
+
+
+@app.post("/api/generate/characters")
+async def generate_characters(request: GenerateCharactersRequest):
+    world = _load_world_payload(request.world_id)
+    count = max(1, min(request.count, 10))
+    candidates = [_build_generated_character(world, i, request.character_type) for i in range(count)]
+    return {"success": True, "candidates": candidates, "generator": "RuleCharacterGenerator"}
+
+
+@app.post("/api/generate/npcs")
+async def generate_npcs(request: GenerateNPCsRequest):
+    world = _load_world_payload(request.world_id)
+    count = max(1, min(request.count, 10))
+    candidates = []
+    for i in range(count):
+        npc = _build_generated_character(world, i, "npc")
+        npc.update({
+            "candidate_type": "npc",
+            "type": request.npc_type,
+            "persistence": "recurring_npc",
+            "narrative_function": request.narrative_function,
+            "location_id": request.location_id or npc.get("location_id", ""),
+            "personality": "基于当前世界配置生成，可继续编辑",
+            "knows": [],
+            "forbidden_knowledge": [],
+            "first_available_topics": [],
+            "generator": "RuleNPCGenerator",
+        })
+        candidates.append(npc)
+    return {"success": True, "candidates": candidates, "generator": "RuleNPCGenerator"}
+
+
+@app.post("/api/generate/clues")
+async def generate_clues(request: GenerateCluesRequest):
+    world = _load_world_payload(request.world_id)
+    count = max(1, min(request.count, 10))
+    candidates = [_build_generated_clue(world, i, request.arc_id, request.clue_level) for i in range(count)]
+    for clue in candidates:
+        clue["allowed_stages"] = [request.stage] if request.stage else []
+        clue["generator"] = "RuleClueGenerator"
+    return {"success": True, "candidates": candidates, "generator": "RuleClueGenerator"}
+
+
+@app.post("/api/story/bootstrap")
+async def create_story_bootstrap(request: BootstrapRequest):
+    if not request.user_seed.strip():
+        raise HTTPException(status_code=400, detail="请先输入故事种子")
+    result = _build_bootstrap_result(request.model_dump())
+    if request.auto_confirm:
+        result = await confirm_story_bootstrap(result["bootstrap_id"])
+    return {"success": True, "bootstrap_id": result["bootstrap_id"], "world_id": result["world_id"], "status": result.get("status", "draft")}
+
+
+@app.get("/api/story/bootstrap/{bootstrap_id}")
+async def get_story_bootstrap(bootstrap_id: str):
+    path = _bootstrap_path(bootstrap_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Bootstrap not found")
+    return _read_json(path, {})
+
+
+@app.post("/api/story/bootstrap/{bootstrap_id}/confirm")
+async def confirm_story_bootstrap(bootstrap_id: str):
+    result = await get_story_bootstrap(bootstrap_id)
+    world_id = result.get("world_id")
+    if not world_id:
+        raise HTTPException(status_code=400, detail="Bootstrap 缺少 world_id")
+    payload = {
+        "world_bible": result.get("world_bible", {}),
+        "characters": result.get("characters", []),
+        "map": result.get("map", []),
+        "clues": result.get("clues", []),
+        "plot_arcs": result.get("plot_arcs", []),
+        "character_arcs": result.get("character_arcs", []),
+        "chapter_goal": result.get("chapter_goal", {}),
+        "quality_policy": result.get("quality_policy", {}),
+        "truth_chain": result.get("truth_chain", []),
+        "evidence_graph": result.get("evidence_graph", {}),
+        "open_threads": result.get("open_threads", []),
+        "writer_story_anchors": result.get("writer_story_anchors", {}),
+        "opening_chapter_plan": result.get("opening_chapter_plan", {}),
+        "bootstrap_result": {**result, "status": "confirmed"},
+        "bootstrap_manifest": {"bootstrap_id": bootstrap_id, "status": "confirmed"},
+    }
+    saved = _save_world_payload(world_id, payload)
+    result["status"] = "confirmed"
+    _write_json(_bootstrap_path(bootstrap_id), result)
+    return {"success": True, "bootstrap_id": bootstrap_id, "world_id": world_id, "summary": _world_summary(saved)}
+
+
+@app.post("/api/story/bootstrap/{bootstrap_id}/start")
+async def start_story_bootstrap(bootstrap_id: str):
+    confirmed = await confirm_story_bootstrap(bootstrap_id)
+    request = SimulationRequest(world_id=confirmed["world_id"])
+    sim = await run_simulation(request)
+    return sim
+
+
+@app.post("/api/worlds/{world_id}/complete")
+async def complete_world(world_id: str, request: BootstrapRequest):
+    existing = _load_world_payload(world_id)
+    bible = existing.get("world_bible") or {}
+    seed = request.user_seed or bible.get("title") or world_id
+    result = _build_bootstrap_result({
+        "user_seed": seed,
+        "target_genre": request.target_genre or bible.get("genre") or bible.get("genre_id") or "generic",
+        "target_words": request.target_words,
+        "world_id": world_id,
+    })
+    if request.auto_confirm:
+        await confirm_story_bootstrap(result["bootstrap_id"])
+        result = await get_story_bootstrap(result["bootstrap_id"])
+    return result
+
+
 class CreateWorldRequest(BaseModel):
     world_id: str
     title: str = "New World"
@@ -349,121 +774,41 @@ class CreateWorldRequest(BaseModel):
 @app.post("/api/worlds/create")
 async def create_world(request: CreateWorldRequest):
     try:
-        world_dir = WORLDS_DIR / request.world_id
-        
+        world_dir = _safe_world_dir(request.world_id, must_exist=False)
+
         if world_dir.exists():
             raise HTTPException(status_code=400, detail="World ID already exists")
-        
+
         world_dir.mkdir(parents=True, exist_ok=True)
-        
+
         default_world_bible = {
             "world_id": request.world_id,
             "title": request.title,
             "genre": request.genre,
             "tone": request.tone,
             "era": request.era,
-            "rules": [
-                "Add your world rules here"
-            ],
-            "themes": [
-                "Theme 1",
-                "Theme 2"
-            ]
+            "rules": [],
+            "themes": [],
         }
-        
-        default_characters = {
-            "characters": [
-                {
-                    "id": "char_protagonist",
-                    "name": "Protagonist",
-                    "role": "protagonist",
-                    "personality": {
-                        "traits": ["Brave", "Curious"]
-                    },
-                    "goals": {
-                        "short_term": "Discover the truth",
-                        "long_term": "Find peace"
-                    },
-                    "skills": {
-                        "observation": 70,
-                        "logic": 65
-                    },
-                    "initial_location": "location_001"
-                }
-            ]
-        }
-        
-        default_map = {
-            "locations": [
-                {
-                    "id": "location_001",
-                    "name": "Starting Point",
-                    "public_description": "The place where the story begins.",
-                    "objects": [],
-                    "connected_to": ["location_002"],
-                    "danger_level": 1
-                },
-                {
-                    "id": "location_002",
-                    "name": "Mysterious Place",
-                    "public_description": "A place full of mysteries.",
-                    "objects": [],
-                    "connected_to": ["location_001"],
-                    "danger_level": 2
-                }
-            ]
-        }
-        
-        default_clues = {
-            "clues": [
-                {
-                    "id": "clue_001",
-                    "name": "First Clue",
-                    "content": "This is the first clue to start your story.",
-                    "truth_level": "hidden_fact",
-                    "importance": 50,
-                    "discover_routes": [],
-                    "on_discovered": {
-                        "add_known_fact_to": "discoverer",
-                        "plot_value": {
-                            "mystery": 10,
-                            "progress": 10,
-                            "conflict": 5
-                        }
-                    }
-                }
-            ]
-        }
-        
-        default_chapter_goal = {
-            "goal": "Setup the story",
-            "pov": "char_protagonist",
-            "start_time": "day1_08:00",
-            "target_progress": 100,
-            "tick_limit": 30,
-            "no_progress_limit": 4
-        }
-        
-        default_quality_policy = {
-            "min_characters": 2,
-            "min_locations": 2,
-            "min_clues": 3,
-            "quality_threshold": 70
-        }
-        
+
         files = {
             "world_bible.json": default_world_bible,
-            "characters.json": default_characters,
-            "map.json": default_map,
-            "clues.json": default_clues,
-            "chapter_goal.json": default_chapter_goal,
-            "quality_policy.json": default_quality_policy
+            "characters.json": {"characters": []},
+            "map.json": {"locations": []},
+            "clues.json": {"clues": []},
+            "plot_arcs.json": {"arcs": []},
+            "character_arcs.json": {"arcs": []},
+            "chapter_goal.json": {},
+            "quality_policy.json": {
+                "min_characters": 2,
+                "min_locations": 2,
+                "min_clues": 3,
+                "quality_threshold": 70,
+            },
         }
-        
+
         for filename, data in files.items():
-            file_path = world_dir / filename
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            _write_json(world_dir / filename, data)
         
         return {
             "success": True,

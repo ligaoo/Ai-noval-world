@@ -26,10 +26,9 @@
             <select 
               v-model="params.arc_id"
               class="w-full bg-noir-800 border border-noir-600 rounded-lg p-3 text-white focus:outline-none focus:border-neon-purple">
-              <option value="">选择剧情线</option>
-              <option value="arc_hospital_truth">旧医院真相篇</option>
-              <option value="arc_identity_mystery">身份谜团</option>
-              <option value="arc_sinister_past">黑暗过往</option>
+              <option v-for="arc in plotArcOptions" :key="arc.value" :value="arc.value">
+                {{ arc.label }}
+              </option>
             </select>
           </div>
 
@@ -53,10 +52,10 @@
             <select 
               v-model="params.stage"
               class="w-full bg-noir-800 border border-noir-600 rounded-lg p-3 text-white focus:outline-none focus:border-neon-purple">
-              <option value="setup">建立异常</option>
-              <option value="investigation">调查线索</option>
-              <option value="confrontation">冲突阶段</option>
-              <option value="revelation">真相揭露</option>
+              <option value="">不指定阶段</option>
+              <option v-for="stage in stageOptions" :key="stage.value" :value="stage.value">
+                {{ stage.label }}
+              </option>
             </select>
           </div>
 
@@ -236,16 +235,30 @@ const routeTypes = [
 ]
 
 const params = ref({
-  arc_id: 'arc_hospital_truth',
-  stage: 'investigation',
+  arc_id: 'unspecified',
+  stage: '',
   clue_level: 'medium',
   count: 3,
-  must_have_routes: 3,
+  must_have_routes: 1,
   allowed_route_types: ['search', 'observe', 'ask']
 })
 
 const clueCandidates = computed(() => generatorStore.clueCandidates)
 const isGenerating = computed(() => generatorStore.isGenerating)
+const plotArcOptions = computed(() => {
+  const arcs = (worldStore.plotArcs || []).map(arc => ({
+    value: arc.arc_id,
+    label: arc.name || arc.arc_id,
+  })).filter(arc => arc.value)
+  return [{ value: 'unspecified', label: '不指定' }, ...arcs]
+})
+const stageOptions = computed(() => {
+  const arc = (worldStore.plotArcs || []).find(item => item.arc_id === params.value.arc_id)
+  return (arc?.stages || []).map(stage => ({
+    value: stage.stage_id,
+    label: stage.name || stage.stage_id,
+  })).filter(stage => stage.value)
+})
 
 const getLevelColor = (level) => {
   const colors = {
@@ -271,94 +284,36 @@ const getLevelLabel = (level) => {
 
 const generateClue = async () => {
   generatorStore.setGenerating(true)
-  
-  setTimeout(() => {
-    const mockCandidates = generateMockClues()
-    generatorStore.addCandidates(mockCandidates)
-    generatorStore.setGenerating(false)
-  }, 1500)
-}
-
-const generateMockClues = () => {
-  const clueTemplates = [
-    {
-      name: '生锈的钥匙',
-      content: '一把布满锈迹的旧钥匙，看起来有些年头了，可能是某个重要房间的钥匙。',
-      routes: [
-        { action_type: '搜索', target: '医院大门锁', difficulty: 30 },
-        { action_type: '询问', target: '老门卫', difficulty: 50 }
-      ]
-    },
-    {
-      name: '泛黄的病历',
-      content: '一份已经泛黄的旧病历，上面的名字和记录都模糊不清，但能看出和某个关键人物有关。',
-      routes: [
-        { action_type: '搜索', target: '档案室', difficulty: 40 },
-        { action_type: '观察', target: '办公桌抽屉', difficulty: 35 }
-      ]
-    },
-    {
-      name: '奇怪的脚步声',
-      content: '半夜在走廊尽头会传来奇怪的脚步声，但走过去查看时却什么都没有。',
-      routes: [
-        { action_type: '观察', target: '走廊尽头', difficulty: 45 },
-        { action_type: '询问', target: '夜班护士', difficulty: 55 }
-      ]
-    },
-    {
-      name: '上锁的档案室',
-      content: '医院深处有一间被牢牢锁住的档案室，里面似乎藏着什么不可告人的秘密。',
-      routes: [
-        { action_type: '调查', target: '档案室', difficulty: 60 },
-        { action_type: '询问', target: '院长', difficulty: 70 }
-      ]
-    },
-    {
-      name: '消失的夜班记录',
-      content: '某天的夜班记录簿不翼而飞，取而代之的是一本全新的空白簿子。',
-      routes: [
-        { action_type: '搜索', target: '护士站', difficulty: 50 },
-        { action_type: '询问', target: '护士长', difficulty: 65 }
-      ]
+  try {
+    const currentWorldId = worldStore.worldBible?.world_id || worldStore.worldId
+    if (!currentWorldId) {
+      throw new Error('请先在世界总览中选择一个世界')
     }
-  ]
-
-  const candidates = []
-  const usedNames = new Set()
-
-  for (let i = 0; i < params.value.count; i++) {
-    const template = clueTemplates[Math.floor(Math.random() * clueTemplates.length)]
-    if (usedNames.has(template.name)) continue
-    usedNames.add(template.name)
-
-    const routes = []
-    const routeCount = Math.min(params.value.must_have_routes, template.routes.length)
-    
-    for (let j = 0; j < routeCount; j++) {
-      const route = template.routes[j]
-      routes.push({
-        route_id: `route_${params.value.arc_id}_${template.name}_${j}`,
-        action_type: route.action_type,
-        target: route.target,
-        difficulty: route.difficulty + Math.floor(Math.random() * 10) - 5,
-        location_id: 'old_hospital_gate'
-      })
-    }
-
-    candidates.push({
-      candidate_type: 'clue',
-      clue_id: `clue_${template.name}_${Date.now()}`,
-      name: template.name,
-      content: template.content,
-      level: params.value.clue_level,
-      arc_id: params.value.arc_id,
-      allowed_stages: [params.value.stage],
-      discover_routes: routes,
-      generator: 'ClueGenerator'
+    const response = await fetch('http://localhost:8421/api/generate/clues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        world_id: currentWorldId,
+        count: params.value.count,
+        arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
+        stage: params.value.stage,
+        clue_level: params.value.clue_level,
+        must_have_routes: params.value.must_have_routes,
+        allowed_route_types: params.value.allowed_route_types,
+      }),
     })
+    const data = await response.json().catch(() => null)
+    if (!response.ok || !data?.success || !Array.isArray(data.candidates)) {
+      throw new Error(data?.detail || data?.message || '线索生成失败')
+    }
+    generatorStore.addCandidates(data.candidates)
+    generatorStore.addLog(`返回 ${data.candidates.length} 条线索候选`)
+  } catch (error) {
+    generatorStore.addLog(`线索生成失败: ${error?.message || 'unknown error'}`)
+    alert(`线索生成失败：${error?.message || '请检查后端服务'}`)
+  } finally {
+    generatorStore.setGenerating(false)
   }
-
-  return candidates
 }
 
 const validateClue = (candidate) => {

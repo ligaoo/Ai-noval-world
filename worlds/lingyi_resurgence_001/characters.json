@@ -1,0 +1,92 @@
+{
+  "characters": [
+    {
+      "id": "char_shen_mo",
+      "character_id": "char_shen_mo",
+      "name": "沈默",
+      "role": "protagonist",
+      "agent_type": "core_agent",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "fog_lamp_crossing",
+      "location_id": "fog_lamp_crossing",
+      "personality": {
+        "traits": ["冷静", "强迫性记录", "不轻易信任", "对失踪者有执念", "恐惧但不退缩"]
+      },
+      "traits": ["冷静", "强迫性记录", "不轻易信任", "对失踪者有执念", "恐惧但不退缩"],
+      "background": "前户籍档案员。三个月前，他在系统里发现母亲的死亡记录被改成了“从未出生”，随后自己的家庭照片中也开始少人。为了证明母亲存在过，他辞职追查临江市旧城区的空户籍事件。",
+      "goals": {
+        "short_term": "查明雾灯路口为什么会删除人的存在记录",
+        "long_term": "找回母亲存在过的证据，并阻止旧城区继续被异常吞没"
+      },
+      "fears": ["自己也被所有人遗忘", "找到的母亲并不再是人", "为了活下去不得不牺牲无辜者"],
+      "secrets": ["他随身携带一页无法被复印的旧户籍纸", "每次靠近雾灯，他都会听见母亲叫他的名字", "他已经有一张照片里的脸开始模糊"],
+      "skills": {"observation": 82, "logic": 76, "social": 38, "courage": 64},
+      "drive": "他不是想拯救城市，只是不愿承认母亲被世界抹掉。"
+    },
+    {
+      "id": "char_luo_qing",
+      "character_id": "char_luo_qing",
+      "name": "罗青",
+      "role": "night_patrol_handler",
+      "agent_type": "core_agent",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "night_bureau_safehouse",
+      "location_id": "night_bureau_safehouse",
+      "personality": {"traits": ["务实", "疲惫", "强硬", "保护欲被压抑", "习惯隐瞒"]},
+      "traits": ["务实", "疲惫", "强硬", "保护欲被压抑", "习惯隐瞒"],
+      "background": "夜巡局临江分部外勤处理员，负责旧城区异常隔离。她见过太多幸存者因为知道真相而崩溃，所以习惯只告诉别人能活下来的部分。",
+      "goals": {
+        "short_term": "把沈默带离雾灯路口并控制信息泄露",
+        "long_term": "封存编号 L-017“雾灯”并保住临江分部最后的人手"
+      },
+      "fears": ["分部全灭", "自己体内封存的异常提前复苏", "沈默打开不该打开的档案"],
+      "secrets": ["她曾经亲手放弃一车被雾灯锁定的乘客", "她体内封着一枚会倒计时的黑色铜铃"],
+      "skills": {"observation": 70, "logic": 68, "social": 58, "courage": 85},
+      "drive": "她相信牺牲少数可以保住多数，但已经快无法说服自己。"
+    },
+    {
+      "id": "char_chen_yu",
+      "character_id": "char_chen_yu",
+      "name": "陈屿",
+      "role": "survivor_witness",
+      "agent_type": "semi_agent_npc",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "fog_lamp_crossing",
+      "location_id": "fog_lamp_crossing",
+      "personality": {"traits": ["话多", "恐惧", "求生欲强", "记忆断裂", "容易崩溃"]},
+      "traits": ["话多", "恐惧", "求生欲强", "记忆断裂", "容易崩溃"],
+      "background": "网约车司机，昨晚载客经过雾灯路口后，车上的三名乘客从行车记录、支付订单和他的记忆里陆续消失，只留下后座一滩冰冷的水。",
+      "goals": {
+        "short_term": "证明自己没有杀人",
+        "long_term": "逃离临江市"
+      },
+      "fears": ["再次看见那盏灯", "后座多出不存在的乘客", "自己的名字从驾驶证上消失"],
+      "secrets": ["他其实听见乘客消失前说过一个地址", "他删掉了第一段行车记录"],
+      "skills": {"observation": 55, "logic": 42, "social": 62, "courage": 28},
+      "drive": "他想活着离开，但他的证词是打开事件的第一把钥匙。"
+    },
+    {
+      "id": "char_mother_voice",
+      "character_id": "char_mother_voice",
+      "name": "母亲的声音",
+      "role": "absent_anchor",
+      "agent_type": "non_agent_anchor",
+      "active_agent": false,
+      "decision_enabled": false,
+      "simulation_role": "story_anchor_only",
+      "visibility": "absent",
+      "initial_location": "archive_basement",
+      "location_id": "archive_basement",
+      "personality": {"traits": ["温柔", "破碎", "反复提醒", "真假难辨"]},
+      "traits": ["温柔", "破碎", "反复提醒", "真假难辨"],
+      "background": "沈默母亲留下的异常语音。她本人是否仍存在尚不确定，声音可能是幸存者的求救，也可能是雾灯诱导沈默进入判定的陷阱。",
+      "goals": {"short_term": "让沈默避开雾灯", "long_term": "未知"},
+      "fears": [],
+      "secrets": ["语音背景里有夜巡局地下档案室的广播声"],
+      "skills": {"observation": 0, "logic": 0, "social": 0, "courage": 0}
+    }
+  ]
+}
