@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { worldsApi } from '@/lib/api'
 
 export const useWorldStore = defineStore('world', () => {
   // 状态初始化：尝试从 localStorage 读取（添加版本号，防止旧数据冲突）
@@ -176,11 +177,7 @@ export const useWorldStore = defineStore('world', () => {
     isLoading.value = true
     loadError.value = ''
     try {
-      const response = await fetch(`http://localhost:8421/api/worlds/${id}`)
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(data?.detail || data?.message || '加载世界失败')
-      }
+      const data = await worldsApi.get(id)
       applyWorldPayload(data, id)
       return data
     } catch (error) {
@@ -197,23 +194,14 @@ export const useWorldStore = defineStore('world', () => {
     if (!currentWorldId) {
       throw new Error('请先选择一个世界')
     }
-    const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        world_bible: worldBible.value || {},
-        characters: characters.value,
-        map: locations.value,
-        clues: clues.value,
-        plot_arcs: plotArcs.value,
-        character_arcs: characterArcs.value,
-      }),
+    return worldsApi.update(currentWorldId, {
+      world_bible: worldBible.value || {},
+      characters: characters.value,
+      map: locations.value,
+      clues: clues.value,
+      plot_arcs: plotArcs.value,
+      character_arcs: characterArcs.value,
     })
-    const data = await response.json().catch(() => null)
-    if (!response.ok) {
-      throw new Error(data?.detail || data?.message || '保存世界失败')
-    }
-    return data
   }
 
   function addCharacter(char) {

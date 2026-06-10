@@ -385,7 +385,7 @@ const openClue = (index) => {
   showAddDialog.value = true
 }
 
-const saveClue = () => {
+const saveClue = async () => {
   if (!newClue.value.clue_id || !newClue.value.name) {
     toast.add({
       severity: 'error',
@@ -396,37 +396,52 @@ const saveClue = () => {
     return
   }
 
-  if (editingIndex.value >= 0) {
+  const isEditing = editingIndex.value >= 0
+  if (isEditing) {
     worldStore.updateClue(editingIndex.value, newClue.value)
-    toast.add({
-      severity: 'success',
-      summary: '更新成功',
-      detail: `线索 ${newClue.value.name} 已更新`,
-      life: 3000,
-    })
   } else {
     worldStore.addClue(newClue.value)
-    toast.add({
-      severity: 'success',
-      summary: '添加成功',
-      detail: `线索 ${newClue.value.name} 已添加`,
-      life: 3000,
-    })
   }
 
-  showAddDialog.value = false
-  resetForm()
+  try {
+    await worldStore.saveWorld()
+    toast.add({
+      severity: 'success',
+      summary: isEditing ? '更新成功' : '添加成功',
+      detail: `线索 ${newClue.value.name} 已保存到后端`,
+      life: 3000,
+    })
+    showAddDialog.value = false
+    resetForm()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: '同步失败',
+      detail: error.message || '线索保存到后端失败',
+      life: 5000,
+    })
+  }
 }
 
-const deleteClue = (index) => {
+const deleteClue = async (index) => {
   const clue = clues.value[index]
   worldStore.removeClue(index)
-  toast.add({
-    severity: 'success',
-    summary: '删除成功',
-    detail: `线索 ${clue.name} 已删除`,
-    life: 3000,
-  })
+  try {
+    await worldStore.saveWorld()
+    toast.add({
+      severity: 'success',
+      summary: '删除成功',
+      detail: `线索 ${clue.name} 已从后端删除`,
+      life: 3000,
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: '同步失败',
+      detail: error.message || '线索删除未同步到后端',
+      life: 5000,
+    })
+  }
 }
 
 const resetForm = () => {

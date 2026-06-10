@@ -409,7 +409,16 @@ const openArc = (index) => {
   showAddDialog.value = true
 }
 
-const saveArc = () => {
+const persistPlotArcs = async (successSummary, detail) => {
+  try {
+    await worldStore.saveWorld()
+    toast.add({ severity: 'success', summary: successSummary, detail, life: 3000 })
+  } catch (error) {
+    toast.add({ severity: 'error', summary: '同步失败', detail: error.message || '剧情弧保存到后端失败', life: 5000 })
+  }
+}
+
+const saveArc = async () => {
   if (!newArc.value.arc_id || !newArc.value.name) {
     toast.add({
       severity: 'error',
@@ -433,47 +442,30 @@ const saveArc = () => {
     newArc.value.current_stage = newArc.value.stages[0].stage_id
   }
 
+  const message = editingIndex.value >= 0
+    ? `剧情弧 ${newArc.value.name} 已更新并保存到后端`
+    : `剧情弧 ${newArc.value.name} 已添加并保存到后端`
+
   if (editingIndex.value >= 0) {
     worldStore.plotArcs[editingIndex.value] = newArc.value
-    toast.add({
-      severity: 'success',
-      summary: '更新成功',
-      detail: `剧情弧 ${newArc.value.name} 已更新`,
-      life: 3000,
-    })
   } else {
     worldStore.plotArcs.push(newArc.value)
-    toast.add({
-      severity: 'success',
-      summary: '添加成功',
-      detail: `剧情弧 ${newArc.value.name} 已添加`,
-      life: 3000,
-    })
   }
 
+  await persistPlotArcs(editingIndex.value >= 0 ? '更新成功' : '添加成功', message)
   showAddDialog.value = false
   resetForm()
 }
 
-const deleteArc = (index) => {
+const deleteArc = async (index) => {
   const arc = plotArcs.value[index]
   worldStore.plotArcs.splice(index, 1)
-  toast.add({
-    severity: 'success',
-    summary: '删除成功',
-    detail: `剧情弧 ${arc.name} 已删除`,
-    life: 3000,
-  })
+  await persistPlotArcs('删除成功', `剧情弧 ${arc.name} 已从后端删除`)
 }
 
-const setCurrentStage = (arcIndex, stageId) => {
+const setCurrentStage = async (arcIndex, stageId) => {
   worldStore.plotArcs[arcIndex].current_stage = stageId
-  toast.add({
-    severity: 'success',
-    summary: '阶段更新',
-    detail: `已切换到 ${stageId}`,
-    life: 3000,
-  })
+  await persistPlotArcs('阶段更新', `已切换到 ${stageId} 并保存到后端`)
 }
 
 const resetForm = () => {

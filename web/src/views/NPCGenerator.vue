@@ -212,6 +212,7 @@
 import { ref, computed } from 'vue'
 import { useWorldStore } from '@/stores/world'
 import { useGeneratorStore } from '@/stores/generator'
+import { generatorsApi } from '@/lib/api'
 import { Settings, Users, Sparkles, CheckCircle, ThumbsUp, X } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
@@ -239,20 +240,14 @@ const generateNPC = async () => {
     if (!currentWorldId) {
       throw new Error('请先在世界总览中选择一个世界')
     }
-    const response = await fetch('http://localhost:8421/api/generate/npcs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        world_id: currentWorldId,
-        count: params.value.count,
-        npc_type: params.value.npc_type,
-        location_id: params.value.location_id,
-        narrative_function: params.value.narrative_function,
-        max_clue_level: params.value.max_clue_level,
-      }),
+    const data = await generatorsApi.npcs({
+      world_id: currentWorldId,
+      count: params.value.count,
+      npc_type: params.value.npc_type,
+      location_id: params.value.location_id,
+      narrative_function: params.value.narrative_function,
     })
-    const data = await response.json().catch(() => null)
-    if (!response.ok || !data?.success || !Array.isArray(data.candidates)) {
+    if (!data?.success || !Array.isArray(data.candidates)) {
       throw new Error(data?.detail || data?.message || 'NPC生成失败')
     }
     generatorStore.addCandidates(data.candidates)

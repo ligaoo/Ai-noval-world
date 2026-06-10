@@ -232,6 +232,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useWorldStore } from '@/stores/world'
+import { worldsApi } from '@/lib/api'
 import { Plus } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
@@ -370,20 +371,7 @@ async function persistCharacters() {
   const worldId = getCurrentWorldId()
   if (!worldId) return
 
-  const response = await fetch(`http://localhost:8421/api/worlds/${worldId}/characters`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      characters: worldStore.characters,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => null)
-    throw new Error(error?.detail?.message || error?.detail || '角色保存到后端失败')
-  }
+  await worldsApi.updateCharacters(worldId, worldStore.characters)
 }
 
 async function deleteCharacter(index) {

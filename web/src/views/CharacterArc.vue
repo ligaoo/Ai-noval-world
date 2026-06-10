@@ -383,7 +383,16 @@ const openArc = (index) => {
   showAddDialog.value = true
 }
 
-const saveArc = () => {
+const persistCharacterArcs = async (successSummary, detail) => {
+  try {
+    await worldStore.saveWorld()
+    toast.add({ severity: 'success', summary: successSummary, detail, life: 3000 })
+  } catch (error) {
+    toast.add({ severity: 'error', summary: '同步失败', detail: error.message || '人物弧保存到后端失败', life: 5000 })
+  }
+}
+
+const saveArc = async () => {
   if (!newArc.value.arc_id || !newArc.value.character_name) {
     toast.add({
       severity: 'error',
@@ -402,48 +411,31 @@ const saveArc = () => {
       : [],
   }))
 
+  const message = editingIndex.value >= 0
+    ? `${newArc.value.character_name} 的人物弧已更新并保存到后端`
+    : `${newArc.value.character_name} 的人物弧已添加并保存到后端`
+
   if (editingIndex.value >= 0) {
     worldStore.characterArcs[editingIndex.value] = newArc.value
-    toast.add({
-      severity: 'success',
-      summary: '更新成功',
-      detail: `${newArc.value.character_name} 的人物弧已更新`,
-      life: 3000,
-    })
   } else {
     worldStore.characterArcs.push(newArc.value)
-    toast.add({
-      severity: 'success',
-      summary: '添加成功',
-      detail: `${newArc.value.character_name} 的人物弧已添加`,
-      life: 3000,
-    })
   }
 
+  await persistCharacterArcs(editingIndex.value >= 0 ? '更新成功' : '添加成功', message)
   showAddDialog.value = false
   resetForm()
 }
 
-const deleteArc = (index) => {
+const deleteArc = async (index) => {
   const arc = characterArcs.value[index]
   worldStore.characterArcs.splice(index, 1)
-  toast.add({
-    severity: 'success',
-    summary: '删除成功',
-    detail: `${arc.character_name} 的人物弧已删除`,
-    life: 3000,
-  })
+  await persistCharacterArcs('删除成功', `${arc.character_name} 的人物弧已从后端删除`)
 }
 
-const nextStage = (arcIndex) => {
+const nextStage = async (arcIndex) => {
   if (worldStore.characterArcs[arcIndex].current_stage_index < worldStore.characterArcs[arcIndex].psychological_stages.length - 1) {
     worldStore.characterArcs[arcIndex].current_stage_index++
-    toast.add({
-      severity: 'success',
-      summary: '阶段推进',
-      detail: '人物已进入下一心理阶段',
-      life: 3000,
-    })
+    await persistCharacterArcs('阶段推进', '人物已进入下一心理阶段并保存到后端')
   }
 }
 

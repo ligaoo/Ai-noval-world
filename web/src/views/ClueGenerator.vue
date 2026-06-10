@@ -222,6 +222,7 @@
 import { ref, computed } from 'vue'
 import { useWorldStore } from '@/stores/world'
 import { useGeneratorStore } from '@/stores/generator'
+import { generatorsApi } from '@/lib/api'
 import { Settings, Search, Sparkles, CheckCircle, ThumbsUp, X } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
@@ -289,21 +290,16 @@ const generateClue = async () => {
     if (!currentWorldId) {
       throw new Error('请先在世界总览中选择一个世界')
     }
-    const response = await fetch('http://localhost:8421/api/generate/clues', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        world_id: currentWorldId,
-        count: params.value.count,
-        arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
-        stage: params.value.stage,
-        clue_level: params.value.clue_level,
-        must_have_routes: params.value.must_have_routes,
-        allowed_route_types: params.value.allowed_route_types,
-      }),
+    const data = await generatorsApi.clues({
+      world_id: currentWorldId,
+      count: params.value.count,
+      arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
+      stage: params.value.stage,
+      clue_level: params.value.clue_level,
+      must_have_routes: params.value.must_have_routes,
+      allowed_route_types: params.value.allowed_route_types,
     })
-    const data = await response.json().catch(() => null)
-    if (!response.ok || !data?.success || !Array.isArray(data.candidates)) {
+    if (!data?.success || !Array.isArray(data.candidates)) {
       throw new Error(data?.detail || data?.message || '线索生成失败')
     }
     generatorStore.addCandidates(data.candidates)

@@ -48,7 +48,7 @@
 
 <script setup>
 import { useWorldStore } from '@/stores/world'
-import { Home, Users, Users2, Map, Search, GitBranch, UserCheck, CheckCircle2, Wand2 } from 'lucide-vue-next'
+import { Home, Users, Users2, Map, Search, GitBranch, UserCheck, CheckCircle2, Wand2, BookOpen, PlayCircle } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
 
@@ -64,6 +64,18 @@ const generatorNavItems = [
     name: 'bootstrap',
     title: 'Story Bootstrap',
     icon: Wand2
+  },
+  {
+    path: '/novel-runs',
+    name: 'novel-runs',
+    title: '长篇运行',
+    icon: BookOpen
+  },
+  {
+    path: '/simulations',
+    name: 'simulations',
+    title: '模拟运行',
+    icon: PlayCircle
   },
   {
     path: '/generator/character',

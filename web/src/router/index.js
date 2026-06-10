@@ -66,6 +66,18 @@ const routes = [
     name: 'bootstrap',
     component: () => import('../views/BootstrapPreview.vue'),
     meta: { title: 'Story Bootstrap' }
+  },
+  {
+    path: '/novel-runs',
+    name: 'novel-runs',
+    component: () => import('../views/NovelRuns.vue'),
+    meta: { title: '长篇运行' }
+  },
+  {
+    path: '/simulations',
+    name: 'simulations',
+    component: () => import('../views/Simulations.vue'),
+    meta: { title: '模拟运行' }
   }
 ]
 

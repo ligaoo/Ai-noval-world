@@ -253,6 +253,7 @@ import { ref, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useWorldStore } from '@/stores/world'
 import { useGeneratorStore } from '@/stores/generator'
+import { generatorsApi } from '@/lib/api'
 import { Users, Sparkles, Pencil, CheckCircle, ThumbsUp, X, Settings, Database } from 'lucide-vue-next'
 
 const worldStore = useWorldStore()
@@ -294,24 +295,15 @@ const generateCharacter = async () => {
     if (!currentWorldId) {
       throw new Error('请先在世界总览中选择一个世界')
     }
-    const response = await fetch('http://localhost:8421/api/generate/characters', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        world_id: currentWorldId,
-        count: params.value.count,
-        genre: worldStore.worldBible?.genre || worldStore.worldBible?.genre_id || '',
-        character_type: params.value.character_type,
-        arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
-      }),
+    const data = await generatorsApi.characters({
+      world_id: currentWorldId,
+      count: params.value.count,
+      genre: worldStore.worldBible?.genre || worldStore.worldBible?.genre_id || '',
+      character_type: params.value.character_type,
+      arc_id: params.value.arc_id === 'unspecified' ? '' : params.value.arc_id,
     })
-
-    const data = await response.json()
     console.log('[CharacterGenerator] LLM response:', data)
-    if (!response.ok || !data.success || !Array.isArray(data.candidates)) {
+    if (!data.success || !Array.isArray(data.candidates)) {
       throw new Error(data.detail || data.message || '角色生成失败')
     }
     if (data.candidates.length === 0) {

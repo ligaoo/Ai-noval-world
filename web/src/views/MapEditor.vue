@@ -310,9 +310,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import { useWorldStore } from '@/stores/world'
 
 const worldStore = useWorldStore()
+const toast = useToast()
 
 const isGraphView = ref(true)
 const showAddDialog = ref(false)
@@ -396,13 +398,20 @@ function editLocation(locationId) {
   }
 }
 
-function deleteLocation(index) {
+async function deleteLocation(index) {
   if (confirm('确定删除这个地点吗？')) {
+    const location = locations.value[index]
     worldStore.removeLocation(index)
+    try {
+      await worldStore.saveWorld()
+      toast.add({ severity: 'success', summary: '删除成功', detail: `地点 ${location.name} 已从后端删除`, life: 3000 })
+    } catch (error) {
+      toast.add({ severity: 'error', summary: '同步失败', detail: error.message || '地点删除未同步到后端', life: 5000 })
+    }
   }
 }
 
-function saveLocation() {
+async function saveLocation() {
   if (newLocation.value.location_id && newLocation.value.name) {
     const existingIndex = locations.value.findIndex(
       l => l.location_id === newLocation.value.location_id
@@ -412,16 +421,21 @@ function saveLocation() {
     } else {
       worldStore.addLocation({ ...newLocation.value })
     }
-    showAddDialog.value = false
-    // 重置表单
-    newLocation.value = {
-      location_id: '',
-      name: '',
-      public_description: '',
-      connected_to: [],
-      objects: [],
-      available_topics: [],
-      danger_level: 1,
+    try {
+      await worldStore.saveWorld()
+      toast.add({ severity: 'success', summary: '保存成功', detail: `地点 ${newLocation.value.name} 已保存到后端`, life: 3000 })
+      showAddDialog.value = false
+      newLocation.value = {
+        location_id: '',
+        name: '',
+        public_description: '',
+        connected_to: [],
+        objects: [],
+        available_topics: [],
+        danger_level: 1,
+      }
+    } catch (error) {
+      toast.add({ severity: 'error', summary: '同步失败', detail: error.message || '地点保存到后端失败', life: 5000 })
     }
   }
 }
