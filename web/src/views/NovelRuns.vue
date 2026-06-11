@@ -82,6 +82,7 @@
       <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
         <button @click="createNovelRun" :disabled="loading || !!longRun || !form.world_id" :style="buttonStyle('#7c3aed')">{{ loading && !longRun ? '创建中...' : '创建长篇运行' }}</button>
         <button @click="loadExistingRun" :disabled="loading || !loadId.trim()" :style="buttonStyle('#0891b2')">加载已有运行</button>
+        <button @click="loadAllRuns" :disabled="loading" :style="buttonStyle('#0f766e')">加载所有运行</button>
         <button @click="generateNextChapter" :disabled="loading || !longRun || isCompleted" :style="buttonStyle('#2563eb')">{{ loading && longRun ? '生成中...' : nextChapterLabel }}</button>
         <button @click="resetRun" :disabled="loading" :style="buttonStyle('#4b5563')">新建另一个运行</button>
         <span v-if="longRun" style="color: #d1d5db; font-size: 13px;">Long Run：<code>{{ longRun.long_run_id }}</code>　状态：{{ longRun.status }}　章节：{{ longRun.current_chapter || 0 }}/{{ longRun.target_chapters }}</span>
@@ -89,6 +90,12 @@
       <div v-if="genreProfile" style="margin-top: 12px;">
         <button @click="showGenreProfile = !showGenreProfile" :style="buttonStyle('#111827')">{{ showGenreProfile ? '隐藏' : '查看' }} Genre Profile</button>
         <pre v-if="showGenreProfile" :style="preStyle">{{ formatJson(genreProfile) }}</pre>
+      </div>
+      <div v-if="runs.length" style="margin-top: 14px; display: grid; gap: 8px;">
+        <div style="color: #9ca3af; font-size: 13px;">已有运行（{{ runs.length }}）</div>
+        <button v-for="run in runs" :key="run.long_run_id" @click="loadRunFromList(run)" :disabled="loading" :style="listButtonStyle(longRun?.long_run_id === run.long_run_id)">
+          <strong>{{ run.long_run_id }}</strong> · {{ run.world_id }} · {{ run.status }} · {{ run.current_chapter || 0 }}/{{ run.target_chapters }} 章
+        </button>
       </div>
       <div v-if="error" style="margin-top: 12px; color: #f87171; white-space: pre-wrap;">{{ error }}</div>
     </section>
@@ -120,9 +127,10 @@
       <div :style="panelStyle">
         <h3 style="margin: 0 0 12px; font-size: 18px; color: #93c5fd;">章节</h3>
         <div v-if="!chapters.length" style="color: #9ca3af; font-size: 13px;">还没有生成章节。</div>
-        <button v-for="chapter in chapters" :key="chapter.chapter_no" @click="selectChapter(chapter.chapter_no)" :style="listButtonStyle(selectedChapterNo === chapter.chapter_no)">
-          第 {{ chapter.chapter_no }} 章 · {{ chapter.status }}<br />
+        <button v-for="chapter in chapters" :key="chapter.chapter_no" @click="selectChapter(chapter.chapter_no)" :style="chapterButtonStyle(chapter, selectedChapterNo === chapter.chapter_no)">
+          第 {{ chapter.chapter_no }} 章 · {{ statusLabel(chapter.status) }}<br />
           <span style="font-size: 11px; color: #9ca3af;">{{ chapter.simulation_id }}</span>
+          <span v-if="chapter.validation_status === 'failed'" style="display: block; margin-top: 4px; font-size: 11px; color: #fecaca;">验证失败 {{ chapter.validation_error_count || 0 }} 项</span>
         </button>
       </div>
 
@@ -132,6 +140,9 @@
           <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px;">
             <h3 style="margin: 0; font-size: 18px; color: #c084fc;">第 {{ selectedChapterNo }} 章控制台</h3>
             <button @click="refreshCurrentChapter" :disabled="loading" :style="buttonStyle('#374151')">刷新当前章节</button>
+          </div>
+          <div v-if="selectedChapterDetail.run_status?.validation_status === 'failed'" style="margin-bottom: 12px; padding: 12px; border-radius: 10px; background: rgba(127, 29, 29, 0.55); border: 1px solid rgba(248, 113, 113, 0.45); color: #fecaca;">
+            本章验证失败：{{ selectedChapterDetail.run_status?.validation_errors?.length || 0 }} 项。当前状态：{{ statusLabel(selectedChapterDetail.run_status?.status) }}。
           </div>
           <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; color: #d1d5db;">
             <div :style="metricStyle">章节目标<br /><strong>{{ selectedChapterDetail.chapter_plan?.chapter_goal?.goal || selectedChapterDetail.chapter_plan?.goal || '-' }}</strong></div>
@@ -159,6 +170,7 @@ const worldStore = useWorldStore()
 
 const worlds = ref([])
 const genres = ref([])
+const runs = ref([])
 const genreProfile = ref(null)
 const showGenreProfile = ref(false)
 const loading = ref(false)
@@ -276,8 +288,27 @@ const listButtonStyle = (active) => ({
   cursor: 'pointer',
 })
 
+const chapterButtonStyle = (chapter, active) => ({
+  ...listButtonStyle(active),
+  border: chapter.validation_status === 'failed' ? '1px solid #f87171' : '1px solid #374151',
+  background: active ? (chapter.validation_status === 'failed' ? '#991b1b' : '#1d4ed8') : '#111827',
+})
+
+const statusLabel = (status) => {
+  const labels = {
+    completed: '完成',
+    completed_with_validation_errors: '完成但验证失败',
+    idle: '空闲',
+    idle_with_validation_errors: '空闲但有验证失败',
+    running: '运行中',
+    failed: '失败',
+    created: '已创建',
+  }
+  return labels[status] || status || '-'
+}
+
 const chapters = computed(() => longRun.value?.chapters || [])
-const isCompleted = computed(() => longRun.value?.status === 'completed')
+const isCompleted = computed(() => longRun.value?.status === 'completed' || longRun.value?.status === 'completed_with_validation_errors')
 const nextChapterLabel = computed(() => {
   if (!longRun.value) return '生成下一章'
   return isCompleted.value ? '已完成' : `生成第 ${(longRun.value.current_chapter || 0) + 1} 章`
@@ -421,6 +452,25 @@ const createNovelRun = async () => {
   }
 }
 
+const loadAllRuns = async () => {
+  loading.value = true
+  error.value = ''
+  try {
+    const data = await novelRunsApi.list()
+    runs.value = data.runs || []
+    if (!runs.value.length) error.value = '还没有找到长篇运行'
+  } catch (err) {
+    error.value = err.message || '加载所有运行失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadRunFromList = async (run) => {
+  loadId.value = run.long_run_id
+  await loadExistingRun()
+}
+
 const loadExistingRun = async () => {
   const id = loadId.value.trim()
   if (!id) return
@@ -474,6 +524,6 @@ const resetRun = () => {
 }
 
 onMounted(async () => {
-  await Promise.allSettled([loadWorlds(), loadGenres()])
+  await Promise.allSettled([loadWorlds(), loadGenres(), loadAllRuns()])
 })
 </script>

@@ -197,6 +197,7 @@ class RunManagerLite:
             "encoding_health_report.json",
             "draft_faithfulness_report.json",
             "chapter_goal_completion_report.json",
+            "narrative_readiness_report.json",
         ]:
             if (self.sim_dir / name).exists():
                 artifacts[name] = name
@@ -380,10 +381,40 @@ class RunManagerLite:
         lines.append("- encoding health: encoding_health_report.json")
         lines.append("- draft faithfulness: draft_faithfulness_report.json")
         lines.append("- chapter goal completion: chapter_goal_completion_report.json")
+        reading_risks = self._reading_experience_risks(validation.get("errors") or [])
+        lines.extend(["", "## Reading Experience Risks", ""])
+        if reading_risks:
+            lines.extend(f"{i + 1}. {risk}" for i, risk in enumerate(reading_risks))
+        else:
+            lines.append("未发现明确的阅读体验风险。")
         lines.extend(["", "## Suggestions", ""])
         lines.extend(f"{i + 1}. {s}" for i, s in enumerate(suggestions))
         lines.append("")
         (self.sim_dir / "tuning_report.md").write_text("\n".join(lines), encoding="utf-8")
+
+    @staticmethod
+    def _reading_experience_risks(errors: list[Dict[str, Any]]) -> list[str]:
+        risk_by_type = {
+            "UNSUPPORTED_CHARACTER_INFERENCE": "存在角色突兀推断或无依据台词：角色说出了前文没有铺垫的具体信息。",
+            "UNAUTHORIZED_PLOT_OBJECT": "正文引入未授权物件：文学加工新增了上游事件或授权清单之外的道具。",
+            "weak_conflict": "冲突强度偏弱：角色之间的阻力或选择压力不足。",
+            "low_plot_progress": "剧情推进偏弱：章节读感可能停留在观察异常，缺少明确进展。",
+            "slow_middle": "中段节奏偏慢：连续观察或搜索会削弱悬疑推进。",
+            "no_thread_progress": "悬念线推进不足：正文留下疑问但系统没有有效推进既有线程。",
+            "weak_protagonist_agency": "主角主动性不足：章节主要依赖观察、等待或接收信息，缺少主动改变局面的行动。",
+            "information_without_action": "信息没有转化为行动：线索或设定出现后，没有推动角色选择、风险或局势变化。",
+            "missing_choice_consequence": "缺少选择后果：章节里缺少明确选择、代价或状态变化，追读动力会减弱。",
+            "abstract_or_soft_hook": "章尾钩子偏抽象：结尾没有落在具体物件、动作、感官变化或可见威胁上。",
+        }
+        risks = []
+        seen = set()
+        for error in errors:
+            error_type = str(error.get("type") or "")
+            risk = risk_by_type.get(error_type)
+            if risk and risk not in seen:
+                risks.append(risk)
+                seen.add(risk)
+        return risks[:6]
 
     def append_error(self, error: BaseException, state: Optional[WorldState] = None) -> None:
         payload = {

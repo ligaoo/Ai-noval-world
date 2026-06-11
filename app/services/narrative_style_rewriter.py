@@ -37,6 +37,9 @@ class NarrativeStyleRewriter:
             "不得新增 plot-level facts、clues、objects、locations、rules、relationship changes。\n"
             "不得确认 suspected_facts，不得泄露 forbidden facts。\n"
             "不得输出说明、清单、系统字段名、scene_id、event_id。\n"
+            "必须压缩装饰性描写：删除连续形容词，减少比喻，保留动作、对白和物证。\n"
+            "每 3 段最多保留 1 个修饰性比喻；不得新增录音机、钥匙、地图、档案等未授权物件。\n"
+            "如原文越过 scene_plan 的地点边界，只能改成回忆、怀疑或简短提及，不得展开新场景。\n"
             "只输出润色后的小说正文。\n"
         )
 

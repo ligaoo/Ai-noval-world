@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,13 +20,15 @@ class GenreProfile:
     quality_weights: Dict[str, float] = field(default_factory=dict)
     quality_weights_override: Dict[str, float] = field(default_factory=dict)
     thread_policy: Dict[str, Any] = field(default_factory=dict)
+    generic_narrative_quality: Dict[str, Any] = field(default_factory=dict)
     forbidden_patterns: List[str] = field(default_factory=list)
 
     @classmethod
     def from_json(cls, file_path: Path) -> GenreProfile:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return cls(**data)
+        allowed_fields = {item.name for item in fields(cls)}
+        return cls(**{key: value for key, value in data.items() if key in allowed_fields})
 
     def to_dict(self) -> Dict[str, Any]:
         return {

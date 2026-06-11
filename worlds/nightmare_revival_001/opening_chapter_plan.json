@@ -1,0 +1,17 @@
+{
+  "version": "正式版V1.1",
+  "chapter_no": 1,
+  "chapter_title_hint": "醒来后的401",
+  "chapter_function": "开场章：顾行舟只在旧河公寓走廊和停业睡眠诊所确认夜门会把梦中细节复写到现实；结尾只抛出末班车站/四楼钩子。不得进入停用住院楼、夜门内部或不存在四楼。",
+  "initial_location": "apartment_corridor",
+  "allowed_locations": ["apartment_corridor", "closed_sleep_clinic"],
+  "mention_only_locations": ["night_bus_stop", "sleep_control_archive", "abandoned_ward_building"],
+  "forbidden_locations": ["abandoned_ward_building"],
+  "main_question": "顾行舟醒来后看见的401门牌，是否证明他的梦已经开始改写现实？",
+  "must_include_clues": ["clue_wrong_doorplate", "clue_three_knocks", "clue_wrong_rules"],
+  "suspect_only_clues": ["clue_sleep_tally_cost", "clue_fourth_floor_bus"],
+  "ending_hook": {
+    "type": "线索钩子",
+    "requirement": "以末班车站报站屏显示“四楼”作为钩子，不进入住院楼，不打开夜门。"
+  }
+}

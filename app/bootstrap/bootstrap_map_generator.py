@@ -4,6 +4,7 @@ import json
 import re
 from typing import List, Optional
 
+from .long_form_pacing import window_for_stage
 from .models import BootstrapLocation, BootstrapLocationObject, ParsedSeed
 
 
@@ -26,7 +27,7 @@ class BootstrapMapGenerator:
     def __init__(self, llm_client=None):
         self.llm_client = llm_client
 
-    def generate(self, parsed: ParsedSeed) -> List[BootstrapLocation]:
+    def generate(self, parsed: ParsedSeed, target_chapters: int = 30) -> List[BootstrapLocation]:
         if self.llm_client:
             locations = self._generate_with_llm(parsed)
             if locations:
@@ -53,6 +54,11 @@ class BootstrapMapGenerator:
                 public_description=self._description_for(name, loc_type),
                 objects=self._objects_for(loc_id, core),
                 danger_level=self._danger_for(loc_type),
+                reveal_stage=self._stage_for(loc_type),
+                recommended_chapter_range=window_for_stage(target_chapters, self._stage_for(loc_type)),
+                narrative_function=self._narrative_function_for(loc_type),
+                unlock_condition=self._unlock_condition_for(loc_type),
+                associated_threads=self._threads_for(loc_type),
             )
             for loc_id, name, loc_type in spec
         ]
@@ -66,7 +72,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON object，格式为 {"locations": [...]}，数组中每项字段：location_id, name, type, connected_to, available_actions, public_description, objects, danger_level。
+- 返回 JSON object，格式为 {{"locations": [...]}}，数组中每项字段：location_id, name, type, connected_to, available_actions, public_description, objects, danger_level。
 - 必须包含这些 location_id：location_gate, location_frontdesk, location_hallway, location_archive, location_basement, location_witness_point, location_inner。
 - 必须包含对象：obj_gate_lock 位于 location_gate；obj_frontdesk_drawer 位于 location_frontdesk；obj_fresh_footprints 位于 location_hallway；obj_missing_file 位于 location_archive。
 - 名称和描述必须从 ParsedSeed 的 core_location、story_type、cast_mode 推导；不要固定成医院、病案室、小卖部、前台钥匙。
@@ -158,3 +164,43 @@ ParsedSeed:
             "external_witness_location": 0,
             "hidden": 3,
         }.get(loc_type, 1)
+
+    @staticmethod
+    def _stage_for(loc_type: str) -> str:
+        return {
+            "entrance": "surface",
+            "interior": "surface",
+            "external_witness_location": "partial",
+            "archive": "partial",
+            "danger_zone": "major",
+            "hidden": "truth",
+        }.get(loc_type, "surface")
+
+    @staticmethod
+    def _narrative_function_for(loc_type: str) -> str:
+        return {
+            "entrance": "建立异常边界与第一处可验证痕迹",
+            "interior": "承接首章调查并制造行动选择",
+            "external_witness_location": "提供外部证词或误导性解释",
+            "archive": "承载中段证据链与规则矛盾",
+            "danger_zone": "推进重大反转和代价确认",
+            "hidden": "承载最终真相或源头证据",
+        }.get(loc_type, "推进调查")
+
+    @staticmethod
+    def _unlock_condition_for(loc_type: str) -> str:
+        return {
+            "danger_zone": "至少确认一条 partial 阶段规则线索后才能实体进入",
+            "hidden": "truth 阶段前只能提及或远观，不能实体进入",
+        }.get(loc_type, "可在对应 reveal_stage 内进入")
+
+    @staticmethod
+    def _threads_for(loc_type: str) -> List[str]:
+        return {
+            "entrance": ["thread_recent_entry", "thread_shared_survival_rule"],
+            "interior": ["thread_recent_entry"],
+            "external_witness_location": ["thread_hidden_actor_trace"],
+            "archive": ["thread_supernatural", "thread_core_motif"],
+            "danger_zone": ["thread_hidden_actor_trace", "thread_supernatural"],
+            "hidden": ["thread_supernatural"],
+        }.get(loc_type, [])

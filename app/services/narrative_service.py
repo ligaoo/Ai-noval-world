@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +20,7 @@ from app.models.rewrite_plan import StyleRewriteReport
 from app.services.narrative_style_rewriter import NarrativeStyleRewriter
 from app.services.rewrite_plan_builder import RewritePlanBuilder
 from app.services.writer_authorization_builder import WriterAuthorizationBuilder
+from app.services.narrative_readiness_guard import NarrativeReadinessError, NarrativeReadinessGuard
 
 
 class NarrativeService:
@@ -63,7 +65,7 @@ class NarrativeService:
         try:
             # WorldConfig.from_directory 璇诲彇鏃?world_dir 淇℃伅娌℃湁鐩存帴淇濆瓨锛?
             # 浣?world.world_id 宸茬粡瀛樺湪锛岄€氳繃 sim_dir 涓婃函鍒?project_root
-            project_root = self.sim_dir.parent.parent  # outputs/sim_xxx -> outputs -> project_root
+            project_root = self._resolve_project_root()
             anchor_file = project_root / "worlds" / self.world.world_id / "writer_story_anchors.json"
             if anchor_file.exists():
                 with open(anchor_file, "r", encoding="utf-8") as f:
@@ -81,6 +83,12 @@ class NarrativeService:
                 return WorldState.model_validate(json.load(f))
         except Exception:
             return None
+
+    def _resolve_project_root(self) -> Path:
+        for candidate in [self.sim_dir, *self.sim_dir.parents]:
+            if (candidate / "worlds").exists() and (candidate / "outputs").exists():
+                return candidate
+        return self.sim_dir.parent.parent
 
     def _build_safe_context(self) -> Dict[str, Any]:
         if not self.state:
@@ -112,35 +120,42 @@ class NarrativeService:
         # 2. 瑙勫垯鐢熸垚 chapter_plan
         plan = self._build_chapter_plan(filtered_plot_events)
         scene_plan_dict = self._scene_plan_dict()
+        chapter_plan_data = {
+            "chapter_title": plan.chapter_title,
+            "pov": plan.pov,
+            "chapter_goal": plan.chapter_goal,
+            "emotional_curve": plan.emotional_curve,
+            "beats": [
+                {
+                    "beat_id": b.beat_id,
+                    "purpose": b.purpose,
+                    "event_ids": b.event_ids,
+                }
+                for b in plan.beats
+            ],
+            "ending_hook_event_id": plan.ending_hook_event_id,
+            "quality_controls": self._quality_controls_dict(),
+            "reveal_budget": self._reveal_budget_dict(),
+            "chapter_brief": self._chapter_brief_dict(),
+            "scene_plan": scene_plan_dict,
+            "scene_count": len(scene_plan_dict.get("scenes", [])),
+            "scene_ids": [scene.get("scene_id") for scene in scene_plan_dict.get("scenes", [])],
+            "selected_event_ids": [event_id for scene in scene_plan_dict.get("scenes", []) for event_id in scene.get("event_ids", [])],
+            "writer_structured_context": structured_context,
+        }
         with open(self.sim_dir / "chapter_plan.json", "w", encoding="utf-8") as f:
-            json.dump({
-                "chapter_title": plan.chapter_title,
-                "pov": plan.pov,
-                "chapter_goal": plan.chapter_goal,
-                "emotional_curve": plan.emotional_curve,
-                "beats": [
-                    {
-                        "beat_id": b.beat_id,
-                        "purpose": b.purpose,
-                        "event_ids": b.event_ids,
-                    }
-                    for b in plan.beats
-                ],
-                "ending_hook_event_id": plan.ending_hook_event_id,
-                "quality_controls": self._quality_controls_dict(),
-                "reveal_budget": self._reveal_budget_dict(),
-                "chapter_brief": self._chapter_brief_dict(),
-                "scene_plan": scene_plan_dict,
-                "scene_count": len(scene_plan_dict.get("scenes", [])),
-                "scene_ids": [scene.get("scene_id") for scene in scene_plan_dict.get("scenes", [])],
-                "selected_event_ids": [event_id for scene in scene_plan_dict.get("scenes", []) for event_id in scene.get("event_ids", [])],
-                "writer_structured_context": structured_context,
-            }, f, ensure_ascii=False, indent=2)
+            json.dump(chapter_plan_data, f, ensure_ascii=False, indent=2)
+
+        readiness_report = NarrativeReadinessGuard().check(chapter_plan_data, force_rule_based=self.force_rule_based)
+        with open(self.sim_dir / "narrative_readiness_report.json", "w", encoding="utf-8") as f:
+            json.dump(readiness_report, f, ensure_ascii=False, indent=2)
+        if readiness_report.get("status") == "failed" and self.llm_client and not self.force_rule_based:
+            raise NarrativeReadinessError(readiness_report)
 
         draft = ""
         rewrite_report = StyleRewriteReport(rewrite_applied=False)
         if self.llm_client and not self.force_rule_based:
-            raw_draft = self._llm_write_chapter(plan)
+            raw_draft = self._sanitize_chapter_draft(self._llm_write_chapter(plan))
             with open(self.sim_dir / "chapter_draft_raw.md", "w", encoding="utf-8") as f:
                 f.write(raw_draft)
 
@@ -161,6 +176,7 @@ class NarrativeService:
                     rewrite_plan=rewrite_plan,
                     writer_authorization=writer_authorization,
                 )
+                rewritten = self._sanitize_chapter_draft(rewritten)
                 rewritten_faithfulness = DraftFaithfulnessChecker(self.world, self.sim_dir).check(
                     draft=rewritten,
                     chapter_plan=self._load_chapter_plan_dict(),
@@ -204,12 +220,13 @@ class NarrativeService:
                     fallback_reason=str(exc),
                 )
 
+            draft = self._sanitize_chapter_draft(draft)
             with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
                 f.write(draft)
             with open(self.sim_dir / "style_rewrite_report.json", "w", encoding="utf-8") as f:
                 json.dump(rewrite_report.model_dump(), f, ensure_ascii=False, indent=2)
         else:
-            draft = self._rule_based_draft(plan, structured_context)
+            draft = self._sanitize_chapter_draft(self._rule_based_draft(plan, structured_context))
             with open(self.sim_dir / "chapter_draft_raw.md", "w", encoding="utf-8") as f:
                 f.write(draft)
             with open(self.sim_dir / "chapter_draft.md", "w", encoding="utf-8") as f:
@@ -254,20 +271,21 @@ class NarrativeService:
         鏍稿績鍘熷垯锛氫竴涓珷鑺傚彧璁叉竻妤氫竴浠朵簨锛屼笉瑕佸爢鐮岀嚎绱?
         """
         plot_events.sort(key=lambda e: e.event_id)
+        beat_events = self._scene_plan_events(plot_events) or plot_events
 
         # 鎯呮劅鏇茬嚎锛氭洿澶?鍠樻伅"闃舵锛屼笉瑕佸叏绋嬬揣寮?
-        emotional_curve = self._build_emotional_curve(plot_events)
+        emotional_curve = self._build_emotional_curve(beat_events)
 
         # beats 鍒嗙粍锛氬悎骞跺瘑闆嗕簨浠讹紝姣忎釜 鐗囨 鍙噴鏀?1-2 涓牳蹇冨紓甯?
-        beats = self._build_beats(plot_events)
+        beats = self._build_beats_from_scene_plan(plot_events) or self._build_beats(beat_events)
 
         # ending hook锛氬彧閫変竴涓湁鎮康鐨勪簨浠讹紝涓嶈鎶婇珮娼叏鏀惧湪缁撳熬
-        ending_hook_event_id = self._select_ending_hook(beats, plot_events)
+        ending_hook_event_id = self._select_ending_hook(beats, beat_events)
 
         return ChapterPlan(
-            chapter_title=self._generate_default_chapter_title(plot_events),
+            chapter_title=self._generate_default_chapter_title(beat_events),
             pov=self.world.chapter_goal.pov,
-            chapter_goal=self.world.chapter_goal.goal,
+            chapter_goal=getattr(self.chapter_brief, "chapter_goal", "") or self.world.chapter_goal.goal,
             emotional_curve=emotional_curve,
             beats=beats,
             ending_hook_event_id=ending_hook_event_id,
@@ -275,6 +293,11 @@ class NarrativeService:
 
     def _generate_default_chapter_title(self, plot_events: List[EventLog]) -> str:
         """鏍规嵁浜嬩欢鎴栦笘鐣岄厤缃敓鎴愰粯璁ょ珷鑺傛爣棰?"""
+        if self.chapter_brief and getattr(self.chapter_brief, "chapter_title_hint", ""):
+            return self.chapter_brief.chapter_title_hint
+        scene_plan = self._scene_plan_dict()
+        if scene_plan.get("chapter_title"):
+            return scene_plan["chapter_title"]
         if plot_events and hasattr(plot_events[0], "location_id") and plot_events[0].location_id:
             try:
                 loc = self.world.map.get_location(plot_events[0].location_id)
@@ -332,6 +355,35 @@ class NarrativeService:
         if len(unique) < 4:
             unique = ["观察", "不安", "紧张", "喘息", "悬念"][:5]
         return unique
+
+    def _scene_plan_events(self, events: List[EventLog]) -> List[EventLog]:
+        event_map = {event.event_id: event for event in events}
+        ordered: List[EventLog] = []
+        seen = set()
+        for scene in self._scene_plan_dict().get("scenes", []) or []:
+            for event_id in scene.get("event_ids", []) or []:
+                event = event_map.get(event_id)
+                if event and event.event_id not in seen:
+                    ordered.append(event)
+                    seen.add(event.event_id)
+        return ordered
+
+    def _build_beats_from_scene_plan(self, events: List[EventLog]) -> List[ChapterBeat]:
+        event_map = {event.event_id: event for event in events}
+        beats: List[ChapterBeat] = []
+        for index, scene in enumerate(self._scene_plan_dict().get("scenes", []) or []):
+            scene_events = [event_map[event_id] for event_id in scene.get("event_ids", []) or [] if event_id in event_map]
+            if not scene_events:
+                continue
+            beats.append(
+                ChapterBeat(
+                    beat_id=f"b{index:03d}",
+                    purpose=scene.get("scene_goal") or self._infer_purpose(scene.get("location_id", ""), scene_events),
+                    event_ids=[event.event_id for event in scene_events],
+                    events=scene_events,
+                )
+            )
+        return beats
 
     def _build_beats(self, events: List[EventLog]) -> List[ChapterBeat]:
         """鎸夊湴鐐瑰垎缁勭敓鎴?beats
@@ -397,6 +449,15 @@ class NarrativeService:
     # ==========================================
     # LLM 姝ｆ枃鏀瑰啓
     # ==========================================
+
+    @staticmethod
+    def _sanitize_chapter_draft(text: str) -> str:
+        cleaned = (text or "").strip()
+        cleaned = re.sub(r"\n?\s*[（(]?全文约\s*\d+\s*字[）)]?\s*$", "", cleaned)
+        cleaned = re.sub(r"\n?\s*[（(]?约\s*\d+\s*字[）)]?\s*$", "", cleaned)
+        cleaned = re.sub(r"\n?\s*```\s*$", "", cleaned)
+        cleaned = re.sub(r"\n?\s*#\s*$", "", cleaned)
+        return cleaned.strip()
 
     def _llm_write_chapter(self, plan: ChapterPlan) -> str:
         """Write chapter text from the chapter plan using the LLM."""
@@ -517,6 +578,11 @@ class NarrativeService:
             "6. 如果结构化输入里没有对应来源，不得自行制造冲突、怀疑链或关系变化。\n"
             "7. 不要把系统字段名、ID 或后台术语写进正文。\n"
             "8. Do not add plot-level facts, clues, rules, objects, routes, locations, or relationship changes beyond writer_authorization and structured upstream context.\n"
+            "9. 文风必须克制：少形容词，少比喻，优先用动作、对白、物证推动恐怖。\n"
+            "10. 每 3 段最多 1 个修饰性比喻；禁止连续堆叠形容词。\n"
+            "11. 不要为了氛围自行新增录音机、钥匙、地图、档案册等物件；除非它们在 Allowed entities 或事件结果中明确出现。\n"
+            "12. 角色不能点名自己尚未看见、听见、回忆或由上游事实推出的具体信息；旅行、车票、回老家、家庭关系、交易、隐藏动机、过去承诺必须有 Visible beats、Structured upstream context、POV-safe facts 或 writer_authorization 依据。\n"
+            "13. 如果缺少具体依据，只能写泛化试探，例如‘你准备走？’或‘你是不是在躲什么？’，不能写‘你买了回老家的票吗？’这类无铺垫具体判断。\n"
         )
 
     def _build_narrative_user_prompt(self, plan: ChapterPlan, allowed_entities: Dict[str, List[str]]) -> str:
@@ -604,6 +670,12 @@ class NarrativeService:
             lines.append(json.dumps(scene_plan, ensure_ascii=False, indent=2))
             lines.append("")
 
+        boundary_contract = self._chapter_boundary_contract(chapter_brief, scene_plan)
+        if boundary_contract:
+            lines.append("[Chapter boundary contract]")
+            lines.extend(boundary_contract)
+            lines.append("")
+
         lines.append("[Chapter plan]")
         lines.append(f"- title: {plan.chapter_title}")
         lines.append(f"- pov: {plan.pov}")
@@ -647,10 +719,24 @@ class NarrativeService:
         lines.append("[Writing requirements]")
         lines.append("Write chapter prose only. Do not expose system field names, IDs, or backend structure in the prose.")
         lines.append("Use the scene plan as structure, but do not print scene titles, scene IDs, event IDs, or reveal_budget labels.")
+        lines.append("Target length: 6000-7500 Chinese characters unless the scene plan explicitly requires more. If in doubt, compress.")
+        lines.append("Use restrained prose: cut decorative adjectives, avoid stacked modifiers, and use at most one figurative comparison every three paragraphs.")
+        lines.append("Prefer verbs, concrete objects, dialogue, and discovered evidence over atmosphere-only description.")
         lines.append("Each scene must have action, sensory detail, and information movement; do not restate events as a log.")
+        lines.append("The POV character must visibly pursue the scene goal; avoid making the protagonist only watch, listen, or wait unless upstream events force that passivity.")
+        lines.append("Important information must change an action, judgment, relationship, risk level, or next-step goal before the scene ends.")
+        lines.append("Use the scene plan fields protagonist_goal, obstacle_or_pressure, choice_or_test, consequence_or_change, and information_action_pair as writing guidance, but never print those field names.")
+        lines.append("If upstream events do not authorize new conflict, do not invent one; instead make the existing obstacle, uncertainty, cost, refusal, or time pressure clear on the page.")
         lines.append("Use only visible facts and allowed entities. Do not reveal forbidden or prevented facts as truth.")
         lines.append("Dialogue and interpersonal conflict must come from the structured upstream context.")
         lines.append("Do not add plot-level facts, clues, rules, objects, routes, locations, or relationship changes that are absent from writer_authorization and structured upstream context.")
+        lines.append("Do not introduce new physical plot objects such as tape recorders, keys, maps, files, passwords, boxes, or devices unless they are listed in Allowed entities or appear in Visible beats.")
+        lines.append("Do not let a character ask or state concrete facts that have not been made visible upstream. Travel plans, tickets, hometowns, family ties, transactions, hidden motives, and past promises must come from Visible beats, Structured upstream context, POV-safe facts, or writer_authorization.")
+        lines.append("If the upstream basis is missing, write a broad probe instead of a specific claim: use '你准备走？' rather than '你买了回老家的票吗？'. If a specific object or plan must appear, first show how the POV sees, hears, remembers, or infers it.")
+        lines.append("For chapter one, keep rule exposition sparse: at most one short explanatory paragraph per scene. Show rules through actions, evidence, broadcasts, records, and character reactions instead of continuous mechanism lectures.")
+        lines.append("Do not end the chapter with a summary list such as 'he confirmed three things'; end on a concrete sensory/action hook.")
+        lines.append("The ending hook must be a concrete object, action, sensory change, identity/status shift, relationship turn, or visible threat grounded in existing events.")
+        lines.append("If a location is not present in the scene plan, it may only be mentioned as hearsay, memory, or suspicion; do not move the scene there.")
         lines.append("End with one concrete sensory or action hook, not a summary.")
 
         return "\n".join(lines)
@@ -797,6 +883,22 @@ class NarrativeService:
         if isinstance(self.reveal_budget, dict):
             return self.reveal_budget
         return {}
+
+    @staticmethod
+    def _chapter_boundary_contract(chapter_brief: Dict[str, Any], scene_plan: Dict[str, Any]) -> List[str]:
+        policy = chapter_brief.get("location_policy") or {}
+        allowed_scene_locations = [scene.get("location_id") for scene in scene_plan.get("scenes", []) or [] if scene.get("location_id")]
+        lines: List[str] = []
+        if allowed_scene_locations:
+            lines.append(f"- Characters may physically enter only these scene locations: {', '.join(allowed_scene_locations)}.")
+        forbidden_ids = policy.get("forbidden_location_ids") or []
+        forbidden_names = policy.get("forbidden_location_names") or []
+        if forbidden_ids or forbidden_names:
+            forbidden = ", ".join([*forbidden_ids, *forbidden_names])
+            lines.append(f"- Forbidden locations may be mentioned only as memory, hearsay, suspicion, or warning; do not stage entry there: {forbidden}.")
+        if policy.get("boundary_notes"):
+            lines.append(f"- Boundary notes: {'；'.join(policy.get('boundary_notes') or [])}")
+        return lines
 
     def _scene_plan_dict(self) -> Dict[str, Any]:
         if not self.scene_plan:

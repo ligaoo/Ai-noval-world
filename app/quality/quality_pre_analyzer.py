@@ -17,11 +17,17 @@ class PreAnalysisResult:
     new_open_thread_count: int = 0
     thread_progress_count: int = 0
     resolved_thread_count: int = 0
+    has_thread_data: bool = False
     selected_event_types: Dict[str, int] = field(default_factory=dict)
     possible_flags: List[str] = field(default_factory=list)
     word_count: int = 0
     paragraph_count: int = 0
     avg_paragraph_length: float = 0.0
+    passive_action_count: int = 0
+    active_action_count: int = 0
+    high_impact_event_count: int = 0
+    information_event_count: int = 0
+    information_with_change_count: int = 0
 
 
 class QualityPreAnalyzer:
@@ -78,6 +84,20 @@ class QualityPreAnalyzer:
             elif event_type:
                 event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
 
+            if action_type in {"observe", "inspect", "ask", "talk", "wait"}:
+                result.passive_action_count += 1
+            elif action_type:
+                result.active_action_count += 1
+
+            has_information = bool(event.discovered_facts) or event_type in self.DISCOVERY_EVENT_TYPES
+            has_change = self._has_change_or_pressure(event)
+            if has_information:
+                result.information_event_count += 1
+                if has_change:
+                    result.information_with_change_count += 1
+            if has_change or event.plot_value.progress >= 4:
+                result.high_impact_event_count += 1
+
         result.selected_event_types = event_type_counts
 
     def _analyze_draft(self, result: PreAnalysisResult, draft: str) -> None:
@@ -100,6 +120,7 @@ class QualityPreAnalyzer:
         """分析悬念线程"""
         if not open_threads:
             return
+        result.has_thread_data = True
 
         thread_ids = {t.get("thread_id") for t in open_threads if t.get("thread_id")}
 
@@ -137,13 +158,14 @@ class QualityPreAnalyzer:
         if search_count + inspect_count >= 4 and result.conflict_event_count == 0:
             flags.append("repetitive_search_events")
 
-        if result.discovery_event_count == 0 and result.thread_progress_count == 0:
+        has_narrative_movement = result.high_impact_event_count > 0 or result.information_with_change_count > 0
+        if result.discovery_event_count == 0 and result.thread_progress_count == 0 and not has_narrative_movement:
             flags.append("low_plot_progress")
 
         if result.new_open_thread_count > 2:
             flags.append("too_many_threads_opened")
 
-        if result.thread_progress_count == 0 and result.resolved_thread_count == 0:
+        if result.has_thread_data and result.thread_progress_count == 0 and result.resolved_thread_count == 0:
             flags.append("no_thread_progress")
 
         if chapter_plan:
@@ -153,6 +175,18 @@ class QualityPreAnalyzer:
 
         if result.paragraph_count > 0 and result.avg_paragraph_length > 300:
             flags.append("long_paragraphs")
+
+        total_actions = result.passive_action_count + result.active_action_count
+        if total_actions >= 4:
+            passive_ratio = result.passive_action_count / total_actions
+            if passive_ratio >= 0.7 and result.high_impact_event_count <= 1:
+                flags.append("weak_protagonist_agency")
+
+        if result.information_event_count >= 2 and result.information_with_change_count == 0:
+            flags.append("information_without_action")
+
+        if result.plot_event_count >= 3 and result.high_impact_event_count == 0:
+            flags.append("missing_choice_consequence")
 
         result.possible_flags = flags
 
@@ -167,9 +201,30 @@ class QualityPreAnalyzer:
             "new_open_thread_count": result.new_open_thread_count,
             "thread_progress_count": result.thread_progress_count,
             "resolved_thread_count": result.resolved_thread_count,
+            "has_thread_data": result.has_thread_data,
             "selected_event_types": result.selected_event_types,
             "possible_flags": result.possible_flags,
             "word_count": result.word_count,
             "paragraph_count": result.paragraph_count,
             "avg_paragraph_length": round(result.avg_paragraph_length, 1),
+            "passive_action_count": result.passive_action_count,
+            "active_action_count": result.active_action_count,
+            "high_impact_event_count": result.high_impact_event_count,
+            "information_event_count": result.information_event_count,
+            "information_with_change_count": result.information_with_change_count,
         }
+
+    @staticmethod
+    def _has_change_or_pressure(event: EventLog) -> bool:
+        action_result = getattr(event, "action_result", None)
+        state_changes = getattr(action_result, "state_changes", None) if action_result else None
+        relationship_changes = getattr(action_result, "relationship_changes", None) if action_result else None
+        return bool(
+            event.hidden_effects
+            or state_changes
+            or relationship_changes
+            or event.plot_value.conflict > 0
+            or event.plot_value.danger > 0
+            or event.plot_value.relationship > 0
+            or event.plot_value.emotion > 0
+        )

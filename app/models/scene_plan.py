@@ -10,6 +10,7 @@ class SelectedEvent(BaseModel):
     importance: float = 0.0
     scene_role: str = "setup"
     reason: str = ""
+    location_id: str = ""
     thread_ids: List[str] = Field(default_factory=list)
     character_impact: List[Dict[str, str]] = Field(default_factory=list)
     reader_question: str = ""
@@ -49,6 +50,11 @@ class SceneSpec(BaseModel):
     reveal_budget: SceneRevealBudget = Field(default_factory=SceneRevealBudget)
     emotional_turn: str = "观察 -> 不安"
     ending_beat: str = ""
+    protagonist_goal: str = ""
+    obstacle_or_pressure: str = ""
+    choice_or_test: str = ""
+    consequence_or_change: str = ""
+    information_action_pair: str = ""
 
 
 class ChapterHook(BaseModel):

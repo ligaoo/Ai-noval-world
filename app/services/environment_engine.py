@@ -399,13 +399,24 @@ class EnvironmentEngine:
     # ----------------------------
 
     def _route_fail_text(self, action: ActionCommand, clue: Clue, route: DiscoverRoute) -> str:
+        actor_name = action.agent_id
+        try:
+            actor = self.world.characters.get_character(action.agent_id)
+            actor_name = actor.name if actor else action.agent_id
+        except Exception:
+            actor_name = action.agent_id
         if action.action_type in ("ask", "talk"):
-            return "对方的回答含糊其辞，你反而更确定他在回避这个话题。"
+            return f"对方的回答含糊其辞，{actor_name}更确定这里有人在回避问题。"
         if action.action_type in ("inspect", "search"):
-            return "你仔细看了看，却没有得到能支撑判断的细节。"
-        return "你没有得到任何新的信息。"
+            return f"{actor_name}仔细看了看，却没有得到能支撑判断的细节。"
+        return f"{actor_name}没有得到任何新的信息。"
 
     def _generic_result(self, state: WorldState, action: ActionCommand) -> str:
+        actor_name = action.agent_id
+        actor = self.world.characters.get_character(action.agent_id)
+        if actor:
+            actor_name = actor.name
+
         if action.action_type == "observe":
             loc = self.world.map.get_location(state.characters[action.agent_id].location_id)
             return loc.public_description
@@ -414,7 +425,7 @@ class EnvironmentEngine:
             if action.target.startswith("hint_"):
                 runtime_obj = state.world.objects.get(action.target, {})
                 description = runtime_obj.get("description") or "这里出现了一个可检查的新细节。"
-                return f"你仔细检查了这个新出现的线索点。{description}"
+                return f"{actor_name}检查了新出现的线索点。{description}"
 
             loc = self.world.map.get_location(state.characters[action.agent_id].location_id)
             obj = next((o for o in loc.objects if o.id == action.target), None)

@@ -161,7 +161,7 @@ class ConsistencyService:
             low = term.lower()
             if low in known_terms:
                 continue
-            if any(key in term for key in ["室", "楼", "门", "房", "馆", "院", "人", "医生", "警察"]):
+            if self._looks_like_new_entity(term):
                 violations.append(
                     Violation(
                         type="new_entity",
@@ -173,6 +173,19 @@ class ConsistencyService:
                 )
 
         return violations
+
+    @staticmethod
+    def _looks_like_new_entity(term: str) -> bool:
+        text = str(term or "").strip()
+        if not text or text in {"人？", "什么人？", "没看到人。", "没看到人", "外面是不是有人？"}:
+            return False
+        if text.endswith(("室", "楼", "馆", "院", "房间", "办公室", "档案室")):
+            return True
+        if any(suffix in text for suffix in ["维修部", "医院", "车站", "路口"]):
+            return True
+        if any(role in text for role in ["医生", "警察"]):
+            return len(text) >= 4
+        return False
 
     # ==========================================
     # LLMCheck：语义检查

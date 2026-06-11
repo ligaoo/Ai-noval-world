@@ -490,6 +490,7 @@ class StoryQualityEvaluatorService:
 
         ending_tail = chapter_draft[-240:] if chapter_draft else ""
         concrete_markers = ["看见", "听见", "摸到", "闻到", "亮起", "熄灭", "移动", "停住", "裂开", "变冷", "变热", "震动", "响", "落下"]
+        abstract_hook_markers = summary_phrases + ["真相", "阴谋", "秘密", "命运", "答案", "谜底", "事情还没有结束", "一切才刚开始"]
         if chapter_no == 1 and any(phrase in ending_tail for phrase in summary_phrases + ["真相", "阴谋", "秘密"]):
             if not any(marker in ending_tail for marker in concrete_markers):
                 problems.append({
@@ -499,6 +500,27 @@ class StoryQualityEvaluatorService:
                     "evidence": [ending_tail.strip()],
                     "can_be_rewritten": True,
                 })
+        if any(marker in ending_tail for marker in abstract_hook_markers) and not any(marker in ending_tail for marker in concrete_markers):
+            problems.append({
+                "type": "abstract_or_soft_hook",
+                "problem_id": "narrative_abstract_or_soft_hook",
+                "message": "章尾钩子偏抽象，缺少具体物件、动作、感官变化或局势变化。",
+                "evidence": [ending_tail.strip()],
+                "can_be_rewritten": True,
+            })
+
+        explanation_markers = ["规则", "机制", "说明", "意味着", "也就是说", "本质上", "原因是", "流程", "阶段", "体系", "设定"]
+        action_markers = ["走", "拿", "推", "拉", "看", "听", "问", "说", "停", "退", "冲", "躲", "翻", "递", "按", "打开", "关上", "写", "拍", "试", "查"]
+        explanation_count = sum(chapter_draft.count(marker) for marker in explanation_markers)
+        action_count = sum(chapter_draft.count(marker) for marker in action_markers)
+        if len(chapter_draft) > 1200 and explanation_count >= 10 and action_count < explanation_count * 2:
+            problems.append({
+                "type": "information_without_action",
+                "problem_id": "narrative_information_without_action",
+                "message": "解释性信息密度偏高，信息没有充分转化为行动、反应或局势变化。",
+                "evidence": [f"解释标记 {explanation_count} 个，动作标记 {action_count} 个"],
+                "can_be_rewritten": True,
+            })
 
         return problems
 

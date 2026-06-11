@@ -11,15 +11,34 @@ from app.models.world import WorldConfig
 
 
 class DraftFaithfulnessChecker:
-    PLOT_OBJECT_KEYWORDS = ["钥匙", "密码", "地图", "信封", "纸条", "笔记", "日记", "录音", "录像", "档案", "药瓶", "匕首", "枪", "门卡", "证件"]
+    STRONG_PLOT_OBJECT_KEYWORDS = ["钥匙", "密码", "地图", "日记", "录音", "录像", "档案", "药瓶", "匕首", "枪", "门卡"]
+    GENERIC_PLOT_OBJECT_KEYWORDS = ["信封", "纸条", "笔记", "证件"]
+    PLOT_OBJECT_KEYWORDS = [*STRONG_PLOT_OBJECT_KEYWORDS, *GENERIC_PLOT_OBJECT_KEYWORDS]
     PLOT_ACTION_KEYWORDS = ["打开", "证明", "发现", "解锁", "指向", "揭示"]
+    GENERIC_PLOT_ACTION_KEYWORDS = ["证明", "揭示", "解锁"]
     BACKEND_FIELDS = ["event_id", "interaction_id", "writer_structured_context", "allowed_facts", "forbidden_fact", "source_interaction"]
     RELATIONSHIP_CHANGE_KEYWORDS = ["彻底信任", "反目", "结盟", "背叛", "不再怀疑"]
-    MOVE_KEYWORDS = ["进入", "走进", "抵达", "前往", "来到", "穿过", "移动"]
+    MOVE_KEYWORDS = ["进入", "走进", "抵达", "前往", "来到", "穿过", "移动", "回到", "推门进"]
+    MENTION_ONLY_LOCATION_KEYWORDS = ["想起", "提到", "听说", "据说", "怀疑", "可能", "不能去", "别去", "不得进入", "禁止进入", "不要进入"]
+    UNSUPPORTED_INFERENCE_TERMS = [
+        "车票",
+        "买了票",
+        "买票",
+        "回老家",
+        "老家",
+        "离开临江",
+        "离开这座城",
+        "家里",
+        "父母",
+        "订单金额",
+        "藏了",
+        "卖了",
+    ]
 
     def __init__(self, world: WorldConfig, sim_dir: Path):
         self.world = world
         self.sim_dir = Path(sim_dir)
+        self.policy_whitelist_keywords = self._load_policy_whitelist_keywords()
 
     def check(
         self,
@@ -37,23 +56,23 @@ class DraftFaithfulnessChecker:
         issues.extend(self._check_unvisited_locations(draft, events))
         issues.extend(self._check_backend_fields(draft))
         issues.extend(self._check_relationship_changes(draft, plan_dict))
+        issues.extend(self._check_unsupported_inferences(draft, plan_dict, events))
         report = self._build_report(issues)
         self._write_json(self.sim_dir / "draft_faithfulness_report.json", report)
         return report
 
     def _check_plot_objects(self, draft: str, authorization: Dict[str, Any]) -> List[Dict[str, Any]]:
-        authorized_objects = {
-            str(item.get("name") or item.get("id") or "")
-            for item in ((authorization.get("authorized_entities") or {}).get("objects") or [])
-            if isinstance(item, dict)
-        }
-        authorized_text = " ".join(authorized_objects)
+        authorized_text = self._authorized_plot_object_text(authorization)
         issues = []
         for sentence in self._sentences(draft):
             for keyword in self.PLOT_OBJECT_KEYWORDS:
                 if keyword not in sentence or keyword in authorized_text:
                     continue
-                severity = "high" if any(action in sentence for action in self.PLOT_ACTION_KEYWORDS) else "medium"
+                has_plot_action = any(action in sentence for action in self.PLOT_ACTION_KEYWORDS)
+                has_generic_plot_action = any(action in sentence for action in self.GENERIC_PLOT_ACTION_KEYWORDS)
+                if keyword in self.GENERIC_PLOT_OBJECT_KEYWORDS and not has_generic_plot_action:
+                    continue
+                severity = "high" if has_plot_action and keyword in self.STRONG_PLOT_OBJECT_KEYWORDS else "medium"
                 issues.append(
                     {
                         "type": "UNAUTHORIZED_PLOT_OBJECT",
@@ -63,6 +82,42 @@ class DraftFaithfulnessChecker:
                     }
                 )
         return issues
+
+    def _authorized_plot_object_text(self, authorization: Dict[str, Any]) -> str:
+        pieces: List[str] = []
+        for item in ((authorization.get("authorized_entities") or {}).get("objects") or []):
+            if isinstance(item, dict):
+                pieces.extend(str(item.get(key) or "") for key in ["name", "id", "description"])
+        pieces.extend(self.policy_whitelist_keywords)
+        pieces.append(json.dumps(self.world.bible.model_dump(), ensure_ascii=False))
+        for clue in self.world.clues.clues:
+            pieces.extend([clue.name, clue.content])
+        for location in self.world.map.locations:
+            for obj in location.objects:
+                pieces.extend([obj.id, obj.name, obj.description, obj.state])
+                aliases = getattr(obj, "aliases", None)
+                if isinstance(aliases, list):
+                    pieces.extend(str(alias) for alias in aliases)
+        for character in self.world.characters.characters:
+            pieces.extend(str(item) for item in getattr(character, "inventory", []) or [])
+        return " ".join(piece for piece in pieces if piece)
+
+    def _load_policy_whitelist_keywords(self) -> List[str]:
+        policy_path = self._resolve_project_root() / "worlds" / self.world.world_id / "quality_policy.json"
+        if not policy_path.exists():
+            return []
+        try:
+            data = json.loads(policy_path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        keywords = data.get("faithfulness_whitelist_keywords") or []
+        return [str(keyword) for keyword in keywords if str(keyword).strip()]
+
+    def _resolve_project_root(self) -> Path:
+        for candidate in [self.sim_dir, *self.sim_dir.parents]:
+            if (candidate / "worlds").exists() and (candidate / "outputs").exists():
+                return candidate
+        return self.sim_dir.parent.parent
 
     def _check_undiscovered_clues(self, draft: str, state: WorldState | None) -> List[Dict[str, Any]]:
         discovered = {
@@ -90,14 +145,21 @@ class DraftFaithfulnessChecker:
         for location in self.world.map.locations:
             if location.id in visited_ids or not location.name or location.name not in draft:
                 continue
-            severity = "medium"
+            severity = "low"
             sentence_hit = ""
+            staged = False
             for sentence in self._sentences(draft):
                 if location.name in sentence:
                     sentence_hit = sentence
+                    if any(word in sentence for word in self.MENTION_ONLY_LOCATION_KEYWORDS):
+                        staged = False
+                        break
                     if any(word in sentence for word in self.MOVE_KEYWORDS):
                         severity = "high"
+                        staged = True
                     break
+            if not staged:
+                continue
             issues.append(
                 {
                     "type": "UNVISITED_LOCATION_MENTION",
@@ -138,6 +200,51 @@ class DraftFaithfulnessChecker:
             if keyword in draft
         ]
 
+    def _check_unsupported_inferences(
+        self,
+        draft: str,
+        plan_dict: Dict[str, Any],
+        events: List[EventLog],
+    ) -> List[Dict[str, Any]]:
+        authorized_text = self._authorized_inference_text(plan_dict, events)
+        issues = []
+        for sentence in self._sentences(draft):
+            matched_terms = [term for term in self.UNSUPPORTED_INFERENCE_TERMS if term in sentence]
+            if not matched_terms:
+                continue
+            unsupported_terms = [term for term in matched_terms if term not in authorized_text]
+            if not unsupported_terms:
+                continue
+            is_dialogue_or_question = any(mark in sentence for mark in ["？", "?", "“", "”", "\""])
+            severity = "high" if is_dialogue_or_question else "medium"
+            issues.append(
+                {
+                    "type": "UNSUPPORTED_CHARACTER_INFERENCE",
+                    "severity": severity,
+                    "message": "Draft contains a concrete character inference without visible upstream basis.",
+                    "details": {
+                        "terms": unsupported_terms,
+                        "sentence": sentence[:200],
+                    },
+                }
+            )
+        return issues
+
+    def _authorized_inference_text(self, plan_dict: Dict[str, Any], events: List[EventLog]) -> str:
+        pieces: List[str] = []
+        for event in events:
+            pieces.append(event.result or "")
+            pieces.extend(event.discovered_facts or [])
+            pieces.extend(event.hidden_effects or [])
+            source = event.source_interaction or {}
+            pieces.append(json.dumps(source, ensure_ascii=False))
+        context = plan_dict.get("writer_structured_context") or {}
+        pieces.append(json.dumps(context, ensure_ascii=False))
+        pieces.append(json.dumps(plan_dict.get("chapter_brief") or {}, ensure_ascii=False))
+        pieces.append(json.dumps(plan_dict.get("reveal_budget") or {}, ensure_ascii=False))
+        pieces.append(json.dumps(plan_dict.get("scene_plan") or {}, ensure_ascii=False))
+        return "\n".join(piece for piece in pieces if piece)
+
     @classmethod
     def _sentences(cls, text: str) -> List[str]:
         return [part.strip() for part in re.split(r"(?<=[。！？.!?])\s*|\n+", text) if part.strip()]
@@ -163,6 +270,7 @@ class DraftFaithfulnessChecker:
             "clue_faithfulness": self._score(100, 30 * sum(1 for i in issues if i.get("type") == "UNDISCOVERED_CLUE_LEAK")),
             "relationship_faithfulness": self._score(100, 20 * sum(1 for i in issues if i.get("type") == "UNSUPPORTED_RELATIONSHIP_SHIFT")),
             "location_faithfulness": self._score(100, 20 * sum(1 for i in issues if i.get("type") == "UNVISITED_LOCATION_MENTION")),
+            "inference_faithfulness": self._score(100, 25 * sum(1 for i in issues if i.get("type") == "UNSUPPORTED_CHARACTER_INFERENCE")),
             "chronology_faithfulness": 100,
             "pov_faithfulness": self._score(100, 15 * high_count),
         }

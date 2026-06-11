@@ -23,24 +23,46 @@ class EventSelectionService:
         discarded: List[DiscardedEvent] = []
         compressed_groups = self._compress_low_value_events(plot_events, scored)
         selected_ids = set()
-
+        selected_semantic_keys = set()
+        viable_scored = []
+        blocked_scored = []
         for event, score in scored:
+            blocked_reason = self._location_block_reason(event, chapter_brief)
+            if blocked_reason:
+                blocked_scored.append((event, score, blocked_reason))
+                discarded.append(DiscardedEvent(event_id=event.event_id, reason=blocked_reason))
+            else:
+                viable_scored.append((event, score))
+
+        selection_pool = viable_scored or [(event, score) for event, score, _ in blocked_scored[:1]]
+
+        for event, score in selection_pool:
             if score < 3 and len(selected) >= 5:
                 discarded.append(DiscardedEvent(event_id=event.event_id, reason="低价值事件：未明显推进线索、关系或风险。"))
                 continue
             if event.event_id in selected_ids:
                 continue
+            semantic_key = self._semantic_key(event)
+            if semantic_key in selected_semantic_keys:
+                discarded.append(DiscardedEvent(event_id=event.event_id, reason="语义重复事件：已由同类结果进入章节骨架。"))
+                continue
             selected.append(self._to_selected_event(event, score, chapter_brief))
             selected_ids.add(event.event_id)
+            selected_semantic_keys.add(semantic_key)
             if len(selected) >= 8:
                 break
 
-        if len(selected) < min(5, len(plot_events)):
-            for event, score in scored:
-                if event.event_id not in selected_ids:
-                    selected.append(self._to_selected_event(event, score, chapter_brief))
-                    selected_ids.add(event.event_id)
-                if len(selected) >= min(5, len(plot_events)):
+        if len(selected) < min(5, len(selection_pool)):
+            for event, score in selection_pool:
+                if event.event_id in selected_ids:
+                    continue
+                semantic_key = self._semantic_key(event)
+                if semantic_key in selected_semantic_keys:
+                    continue
+                selected.append(self._to_selected_event(event, score, chapter_brief))
+                selected_ids.add(event.event_id)
+                selected_semantic_keys.add(semantic_key)
+                if len(selected) >= min(5, len(selection_pool)):
                     break
 
         selected.sort(key=lambda item: self._event_order(plot_events).get(item.event_id, 0))
@@ -83,14 +105,30 @@ class EventSelectionService:
         )
         if event.discovered_facts:
             score += 4
+            if self._has_consequence(event):
+                score += 2
         if event.hidden_effects:
             score += 2
         if event.source_interaction:
             score += 2
+        if event.action and event.action.action_type not in {"observe", "wait"}:
+            score += 1.5
+        if event.action and event.action.risk_level in {"medium", "high"}:
+            score += 1.5
         if event.event_type in {"wait", "idle"}:
             score -= 3
         if event.event_type in {"observe", "inspect", "search"}:
             score += 1
+        if self._is_passive_information_event(event):
+            score -= 1.5
+        policy = getattr(chapter_brief, "location_policy", None)
+        if policy:
+            preferred = set(getattr(policy, "preferred_location_ids", []) or [])
+            allowed = set(getattr(policy, "allowed_location_ids", []) or [])
+            if event.location_id in preferred:
+                score += 2
+            if allowed and event.location_id not in allowed:
+                score -= 6
         text = event.result or ""
         for clue_id in chapter_brief.must_include_clues:
             if clue_id and clue_id in text:
@@ -105,6 +143,7 @@ class EventSelectionService:
             importance=round(score, 2),
             scene_role=role,
             reason=self._reason_for(event, role),
+            location_id=event.location_id or "",
             thread_ids=thread_ids,
             character_impact=[{"character_id": actor, "impact": self._impact_for(event)} for actor in event.actors[:3]],
             reader_question=self._reader_question(event, thread_ids),
@@ -136,6 +175,21 @@ class EventSelectionService:
         if len(current_ids) >= 2:
             groups.append(CompressedEventGroup(source_event_ids=current_ids, summary=f"角色在 {current_key} 附近进行低强度观察或等待，未产生新的核心事实。"))
         return groups
+
+    @classmethod
+    def _semantic_key(cls, event: EventLog) -> str:
+        facts = ",".join(sorted(str(fact) for fact in event.discovered_facts))
+        text = cls._normalize_text(event.result or "")[:80]
+        return "|".join([
+            event.event_type or "",
+            event.location_id or "",
+            facts,
+            text,
+        ])
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        return "".join(str(text or "").split())
 
     @staticmethod
     def _scene_role(event: EventLog) -> str:
@@ -179,16 +233,50 @@ class EventSelectionService:
             return f"这个事件如何推进悬念 {thread_ids[0]}？"
         if event.discovered_facts:
             return "这条线索真正指向什么？"
-        return "这个异常细节为什么会出现？"
+        return ""
 
     @staticmethod
     def _related_threads(event: EventLog, chapter_brief: ChapterBrief) -> List[str]:
         text = event.result or ""
-        result = [thread for thread in chapter_brief.must_advance_threads if thread and thread in text]
-        if not result and chapter_brief.must_advance_threads and (event.discovered_facts or event.plot_value.progress > 0):
-            result.append(chapter_brief.must_advance_threads[0])
+        facts = " ".join(str(fact) for fact in event.discovered_facts)
+        haystack = f"{text} {facts}"
+        result = [thread for thread in chapter_brief.must_advance_threads if thread and thread in haystack]
         return result[:3]
 
     @staticmethod
     def _event_order(events: List[EventLog]) -> Dict[str, int]:
         return {event.event_id: index for index, event in enumerate(events)}
+
+    @staticmethod
+    def _location_block_reason(event: EventLog, chapter_brief: ChapterBrief) -> str:
+        policy = getattr(chapter_brief, "location_policy", None)
+        if not policy:
+            return ""
+        location_id = event.location_id or ""
+        if location_id and location_id in set(getattr(policy, "forbidden_location_ids", []) or []):
+            return f"章节地点边界禁止：{location_id}"
+        allowed = set(getattr(policy, "allowed_location_ids", []) or [])
+        if allowed and location_id and location_id not in allowed:
+            return f"非本章允许地点：{location_id}"
+        return ""
+
+    @staticmethod
+    def _has_consequence(event: EventLog) -> bool:
+        action_result = getattr(event, "action_result", None)
+        state_changes = getattr(action_result, "state_changes", None) if action_result else None
+        relationship_changes = getattr(action_result, "relationship_changes", None) if action_result else None
+        return bool(
+            event.hidden_effects
+            or state_changes
+            or relationship_changes
+            or event.plot_value.conflict > 0
+            or event.plot_value.danger > 0
+            or event.plot_value.relationship > 0
+            or event.plot_value.emotion > 0
+        )
+
+    @classmethod
+    def _is_passive_information_event(cls, event: EventLog) -> bool:
+        action_type = event.action.action_type if event.action else event.event_type
+        passive_action = action_type in {"observe", "inspect", "search", "ask", "talk", "wait"}
+        return bool(event.discovered_facts and passive_action and not cls._has_consequence(event))

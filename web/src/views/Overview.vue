@@ -12,13 +12,13 @@
         <PButton label="生成 NPC" icon="pi pi-users" @click="goTo('/generator/npc')" />
         <PButton label="生成线索" icon="pi pi-search" @click="goTo('/generator/clue')" />
         <PButton label="生成角色" icon="pi pi-user-plus" @click="goTo('/generator/character')" />
-        <PButton 
-          :label="isSimulating ? '模拟中...' : '开始模拟'" 
-          icon="pi pi-play" 
-          severity="info" 
+        <PButton
+          :label="primaryRunButtonLabel"
+          icon="pi pi-play"
+          severity="info"
           @click="startSimulation"
-          :disabled="isSimulating"
-          :loading="isSimulating"
+          :disabled="longRunLoading || isLongRunCompleted"
+          :loading="longRunLoading"
         />
       </div>
     </div>
@@ -53,6 +53,86 @@
           <option value="关系钩子">关系钩子</option>
           <option value="危险钩子">危险钩子</option>
         </select>
+      </div>
+    </div>
+
+    <!-- 章节管理 -->
+    <div style="background: rgba(42, 45, 53, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 6px;">章节管理</h3>
+          <div style="font-size: 13px; color: #9ca3af;">
+            当前章节：{{ currentChapter }}/{{ targetChapters }}
+            <span v-if="longRun">　状态：{{ longRun.status }}　Long Run：<code>{{ longRun.long_run_id }}</code></span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button @click="startSimulation" :disabled="longRunLoading || isLongRunCompleted" style="background: #2563eb; color: white; border: none; padding: 9px 16px; border-radius: 9px; cursor: pointer;">
+            {{ primaryRunButtonLabel }}
+          </button>
+          <button @click="refreshLongRun" :disabled="longRunLoading || !longRun" style="background: #374151; color: white; border: none; padding: 9px 16px; border-radius: 9px; cursor: pointer;">
+            刷新
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 6px;">目标章节数</label>
+          <input v-model.number="longRunForm.target_chapters" type="number" min="1" :disabled="!!longRun" style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px;" />
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 6px;">Seed</label>
+          <input v-model.number="longRunForm.seed" type="number" :disabled="!!longRun" style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px;" />
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 6px;">Genre ID</label>
+          <input v-model="longRunForm.genre_id" :disabled="!!longRun" style="width: 100%; background: #1c1e24; border: 1px solid #374151; color: #f3f4f6; padding: 8px; border-radius: 8px;" />
+        </div>
+      </div>
+
+      <div v-if="longRunError" style="color: #f87171; margin-bottom: 10px; white-space: pre-wrap;">{{ longRunError }}</div>
+
+      <div v-if="longRunChapters.length" style="display: grid; grid-template-columns: 260px 1fr; gap: 14px; align-items: start; margin-top: 14px;">
+        <div style="background: rgba(28,30,36,0.6); padding: 12px; border-radius: 10px;">
+          <h4 style="margin: 0 0 8px; color: #93c5fd;">章节列表</h4>
+          <button
+            v-for="chapter in longRunChapters"
+            :key="chapter.chapter_no"
+            @click="selectLongRunChapter(chapter.chapter_no)"
+            style="display: block; width: 100%; text-align: left; margin-bottom: 6px; background: #111827; color: #e5e7eb; border: 1px solid #374151; border-radius: 8px; padding: 8px; cursor: pointer;"
+          >
+            第 {{ chapter.chapter_no }} 章 · {{ chapter.status }}<br />
+            <span style="font-size: 11px; color: #9ca3af;">{{ chapter.simulation_id }}</span>
+          </button>
+        </div>
+
+        <div style="display: grid; gap: 12px;">
+          <div v-if="selectedChapterDetail" style="background: rgba(28,30,36,0.6); padding: 12px; border-radius: 10px;">
+            <h4 style="margin: 0 0 8px; color: #c084fc;">章节正文</h4>
+            <pre style="white-space: pre-wrap; max-height: 420px; overflow: auto; font-size: 13px; line-height: 1.7; background: #111827; padding: 12px; border-radius: 8px;">{{ selectedChapterDetail.chapter_draft || '暂无正文' }}</pre>
+          </div>
+
+          <div v-if="selectedChapterDetail" style="background: rgba(28,30,36,0.6); padding: 12px; border-radius: 10px;">
+            <h4 style="margin: 0 0 8px; color: #fbbf24;">Continuity</h4>
+            <div style="font-size: 13px; color: #d1d5db; line-height: 1.7;">
+              摘要：{{ selectedChapterDetail.chapter_continuity?.chapter_delta_summary || '-' }}<br />
+              Open Threads：{{ (selectedChapterDetail.chapter_continuity?.open_threads || []).join(' / ') || '-' }}<br />
+              New Questions：{{ (selectedChapterDetail.chapter_continuity?.new_questions || []).join(' / ') || '-' }}<br />
+              New Facts：{{ (selectedChapterDetail.chapter_continuity?.new_facts || []).join(' / ') || '-' }}
+            </div>
+          </div>
+
+          <div style="background: rgba(28,30,36,0.6); padding: 12px; border-radius: 10px;">
+            <h4 style="margin: 0 0 8px; color: #34d399;">共享 Agent 记忆</h4>
+            <div v-if="!longRunMemory.length" style="font-size: 13px; color: #9ca3af;">暂无记忆记录。</div>
+            <div v-for="memory in longRunMemory.slice(-12).reverse()" :key="memory.memory_id" style="font-size: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 6px 0;">
+              <strong>{{ memory.agent_id }}</strong> / {{ memory.type }} / importance={{ memory.importance }}<br />
+              {{ memory.content }}<br />
+              <span style="color: #9ca3af;">{{ (memory.tags || []).join(', ') }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -498,6 +578,8 @@ import {
   RefreshCw,
 } from 'lucide-vue-next'
 
+const API = ''
+
 const router = useRouter()
 const worldStore = useWorldStore()
 
@@ -523,7 +605,7 @@ const newWorldForm = ref({
 // 加载世界列表
 const loadWorldsList = async () => {
   try {
-    const response = await fetch('http://localhost:8421/api/worlds')
+    const response = await fetch(`${API}/api/worlds`)
     const data = await response.json()
     availableWorlds.value = data.worlds || []
   } catch (error) {
@@ -548,18 +630,27 @@ const formatApiError = (payload, fallback) => {
   return parts.length > 0 ? parts.join('\n\n') : JSON.stringify(detail)
 }
 
+const resetLongRunState = () => {
+  longRunError.value = ''
+  longRun.value = null
+  longRunChapters.value = []
+  selectedChapterDetail.value = null
+  longRunMemory.value = []
+}
+
 // 加载选中的世界
-const loadSelectedWorld = async () => {
+const loadSelectedWorld = async (silent = false) => {
   if (!selectedWorldId.value) return
-  
+
   try {
     await worldStore.loadWorld(selectedWorldId.value)
     completionResult.value = null
+    resetLongRunState()
 
-    alert(`✅ 已加载世界: ${worldStore.worldBible?.title || selectedWorldId.value}`)
+    if (!silent) alert(`✅ 已加载世界: ${worldStore.worldBible?.title || selectedWorldId.value}`)
   } catch (error) {
     console.error('加载世界失败:', error)
-    alert(`❌ 加载世界失败: ${error.message}`)
+    if (!silent) alert(`❌ 加载世界失败: ${error.message}`)
   }
 }
 
@@ -578,7 +669,7 @@ const createNewWorld = async () => {
   isCreatingWorld.value = true
   
   try {
-    const response = await fetch('http://localhost:8421/api/worlds/create', {
+    const response = await fetch(`${API}/api/worlds/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -664,17 +755,18 @@ onMounted(async () => {
     // 如果 localStorage 中有世界数据，检查是否在可用列表中
     const worldExists = availableWorlds.value.some(w => w.id === storedWorldId)
     if (worldExists) {
-      // 如果存在，选中该世界
+      // 如果存在，选中并加载该世界
       selectedWorldId.value = storedWorldId
+      await loadSelectedWorld(true)
     } else if (availableWorlds.value.length > 0) {
       // 如果不存在（数据被删除），选中第一个可用世界并加载
       selectedWorldId.value = availableWorlds.value[0].id
-      await loadSelectedWorld()
+      await loadSelectedWorld(true)
     }
   } else if (availableWorlds.value.length > 0) {
     // 如果没有存储数据，选中第一个可用世界并加载
     selectedWorldId.value = availableWorlds.value[0].id
-    await loadSelectedWorld()
+    await loadSelectedWorld(true)
   }
 })
 
@@ -714,17 +806,37 @@ const goTo = (path) => {
   router.push(path)
 }
 
-const isSimulating = ref(false)
-const simulationResult = ref(null)
+const longRunLoading = ref(false)
+const longRunError = ref('')
+const longRun = ref(null)
+const longRunChapters = ref([])
+const selectedChapterDetail = ref(null)
+const longRunMemory = ref([])
+const longRunForm = ref({
+  target_chapters: 10,
+  seed: 12345,
+  genre_id: 'horror',
+})
 const qualityStyleFocus = ref(['悬疑推进', '恐怖氛围'])
 const generationStrength = ref('平衡')
 const endingHookType = ref('线索钩子')
+
+const currentChapter = computed(() => longRun.value?.current_chapter || 0)
+const targetChapters = computed(() => longRun.value?.target_chapters || longRunForm.value.target_chapters)
+const hasLongRun = computed(() => !!longRun.value?.long_run_id)
+const isLongRunCompleted = computed(() => longRun.value?.status === 'completed')
+const primaryRunButtonLabel = computed(() => {
+  if (longRunLoading.value) return '生成中...'
+  if (!hasLongRun.value) return '创建长篇运行'
+  if (isLongRunCompleted.value) return '已完成'
+  return `生成第 ${currentChapter.value + 1} 章`
+})
 
 const saveCurrentWorldDraft = async () => {
   const currentWorldId = selectedWorldId.value || worldBible.value.world_id
   if (!currentWorldId) throw new Error('请先选择一个世界')
 
-  const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}`, {
+  const response = await fetch(`${API}/api/worlds/${currentWorldId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -755,7 +867,7 @@ const completeCurrentWorld = async () => {
 
   try {
     const currentWorldId = await saveCurrentWorldDraft()
-    const response = await fetch(`http://localhost:8421/api/worlds/${currentWorldId}/complete`, {
+    const response = await fetch(`${API}/api/worlds/${currentWorldId}/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -787,7 +899,7 @@ const confirmCompletion = async () => {
   isConfirmingCompletion.value = true
 
   try {
-    const response = await fetch(`http://localhost:8421/api/story/bootstrap/${completionResult.value.bootstrap_id}/confirm`, {
+    const response = await fetch(`${API}/api/story/bootstrap/${completionResult.value.bootstrap_id}/confirm`, {
       method: 'POST'
     })
 
@@ -809,104 +921,127 @@ const confirmCompletion = async () => {
   }
 }
 
-const startSimulation = async () => {
-  if (isSimulating.value) return
-  
-  // 验证基本配置
-  if (!worldBible.value.world_id || !worldBible.value.title) {
-    alert('请先填写世界圣经的基本信息（世界 ID 和标题）')
-    return
+const getRunnableWorldId = () => {
+  const currentWorldId = selectedWorldId.value || worldBible.value.world_id
+  if (!currentWorldId) throw new Error('请先选择一个世界')
+
+  const selectedWorld = availableWorlds.value.find(world => world.id === currentWorldId)
+  if (selectedWorld && selectedWorld.formal_run_ready === false) {
+    const issues = selectedWorld.formal_run_issues || []
+    throw new Error(`当前世界尚未满足正式运行条件，请先点击“自动补全为正式世界”。${issues.length > 0 ? `\n\n问题：\n${issues.map(issue => `- ${issue}`).join('\n')}` : ''}`)
   }
 
-  isSimulating.value = true
-  simulationResult.value = null
+  return currentWorldId
+}
+
+const refreshLongRun = async () => {
+  if (!longRun.value?.long_run_id) return
+  longRunLoading.value = true
+  longRunError.value = ''
+  try {
+    const response = await fetch(`${API}/api/novel-runs/${longRun.value.long_run_id}`)
+    const data = await response.json()
+    if (!response.ok) throw new Error(formatApiError(data, '刷新长篇运行失败'))
+    longRun.value = data
+    longRunChapters.value = data.chapters || []
+  } catch (error) {
+    longRunError.value = error.message || '刷新长篇运行失败'
+  } finally {
+    longRunLoading.value = false
+  }
+}
+
+const loadLongRunMemory = async () => {
+  if (!longRun.value?.long_run_id) return
+  const response = await fetch(`${API}/api/novel-runs/${longRun.value.long_run_id}/memory`)
+  const data = await response.json()
+  if (!response.ok) throw new Error(formatApiError(data, '读取记忆失败'))
+  longRunMemory.value = data.memories || []
+}
+
+const selectLongRunChapter = async (chapterNo) => {
+  if (!longRun.value?.long_run_id) return
+  longRunError.value = ''
+  try {
+    const response = await fetch(`${API}/api/novel-runs/${longRun.value.long_run_id}/chapters/${chapterNo}`)
+    const data = await response.json()
+    if (!response.ok) throw new Error(formatApiError(data, '读取章节失败'))
+    selectedChapterDetail.value = data
+    await loadLongRunMemory()
+  } catch (error) {
+    longRunError.value = error.message || '读取章节失败'
+  }
+}
+
+const createLongRun = async () => {
+  if (longRunLoading.value) return
+  longRunLoading.value = true
+  longRunError.value = ''
 
   try {
-    // 使用当前选中的 world_id，优先级：selectedWorldId > worldBible.world_id
-    const currentWorldId = selectedWorldId.value || worldBible.value.world_id
-    if (!currentWorldId) {
-      alert('请先选择一个世界')
-      isSimulating.value = false
-      return
-    }
-
-    const selectedWorld = availableWorlds.value.find(world => world.id === currentWorldId)
-    if (selectedWorld && selectedWorld.formal_run_ready === false) {
-      const issues = selectedWorld.formal_run_issues || []
-      throw new Error(`当前世界尚未满足正式运行条件，请先点击“自动补全为正式世界”。${issues.length > 0 ? `\n\n问题：\n${issues.map(issue => `- ${issue}`).join('\n')}` : ''}`)
-    }
-
-    // 1. 启动模拟
-    const response = await fetch('http://localhost:8421/api/simulations/run', {
+    const currentWorldId = getRunnableWorldId()
+    const response = await fetch(`${API}/api/novel-runs`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         world_id: currentWorldId,
         mode: 'llm',
         version: '正式版V1',
-        seed: 12345,
-        genre_id: 'horror',
-        target_chapters: 10,
-        chapter_no: 1,
+        seed: longRunForm.value.seed,
+        genre_id: longRunForm.value.genre_id,
+        target_chapters: longRunForm.value.target_chapters,
         quality_controls: {
           style_focus: qualityStyleFocus.value,
           generation_strength: generationStrength.value,
           ending_hook_type: endingHookType.value,
-          rewrite_policy: 'auto_once'
-        }
-      })
+          rewrite_policy: 'auto_once',
+        },
+      }),
     })
+    const data = await response.json()
+    if (!response.ok) throw new Error(formatApiError(data, '创建长篇运行失败'))
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => null)
-      throw new Error(formatApiError(error, '启动模拟失败'))
-    }
-
-    const startResult = await response.json()
-    const simId = startResult.sim_id
-    
-    console.log('模拟已启动，ID:', simId)
-
-    // 2. 轮询检查状态
-    let pollCount = 0
-    const maxPolls = 300 // 最多等 5 分钟（每次 1 秒）
-    
-    while (pollCount < maxPolls) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      pollCount++
-
-      try {
-        const statusRes = await fetch(`http://localhost:8421/api/simulations/${simId}/status`)
-        if (!statusRes.ok) continue
-        
-        const status = await statusRes.json()
-        console.log('模拟状态:', status)
-
-        if (status.status === 'completed') {
-          simulationResult.value = status
-          alert(`✅ 模拟完成！\n\n模拟 ID: ${status.simulation_id || simId}\n运行模式: ${status.runtime_mode || 'llm'} / ${status.runtime_version || '正式版V1'}`)
-          break
-        } else if (status.status === 'failed') {
-          throw new Error(status.error || '模拟运行失败')
-        }
-        // 继续等待 running 状态
-      } catch (e) {
-        console.warn('检查状态失败:', e)
-      }
-    }
-
-    if (pollCount >= maxPolls) {
-      alert(`⏱ 模拟仍在运行中...\n\n模拟 ID: ${simId}\n请稍后在模拟列表中查看结果`)
-    }
-
+    longRun.value = data.run
+    longRunChapters.value = data.run.chapters || []
+    selectedChapterDetail.value = null
+    longRunMemory.value = []
   } catch (error) {
-    console.error('模拟请求失败:', error)
-    alert(`❌ 模拟请求失败\n\n错误信息: ${error.message}\n\n请确保后端服务正在运行 (端口 8421)`)
+    longRunError.value = error.message || '创建长篇运行失败'
   } finally {
-    isSimulating.value = false
+    longRunLoading.value = false
   }
+}
+
+const generateNextLongRunChapter = async () => {
+  if (!longRun.value?.long_run_id || longRunLoading.value || isLongRunCompleted.value) return
+  longRunLoading.value = true
+  longRunError.value = ''
+
+  try {
+    const response = await fetch(`${API}/api/novel-runs/${longRun.value.long_run_id}/chapters/next`, { method: 'POST' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(formatApiError(data, '生成下一章失败'))
+
+    longRun.value = data.run
+    longRunChapters.value = data.run.chapters || []
+    await selectLongRunChapter(data.chapter.chapter_no)
+  } catch (error) {
+    const message = error.message || '生成下一章失败'
+    longRunError.value = message
+    await refreshLongRun().catch(() => {})
+    longRunError.value = message
+  } finally {
+    longRunLoading.value = false
+  }
+}
+
+const startSimulation = async () => {
+  if (longRunLoading.value || isLongRunCompleted.value) return
+  if (!hasLongRun.value) {
+    await createLongRun()
+    return
+  }
+  await generateNextLongRunChapter()
 }
 </script>
 

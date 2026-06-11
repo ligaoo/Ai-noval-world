@@ -1,0 +1,24 @@
+{
+  "anchors": [
+    {
+      "id": "anchor_reality_rewrites_dream",
+      "type": "core_rule",
+      "text": "夜门不是把人困在梦里，而是让现实逐步承认梦里的错误细节。"
+    },
+    {
+      "id": "anchor_sleep_has_cost",
+      "type": "theme",
+      "text": "睡眠既是人类的恢复方式，也是异常进入现实的入口。"
+    },
+    {
+      "id": "anchor_rules_can_be_wrong",
+      "type": "theme",
+      "text": "幸存者依赖规则活下来，但规则可能被梦境故意污染。"
+    },
+    {
+      "id": "anchor_no_copy",
+      "type": "constraint",
+      "text": "保持原创：不使用现成作品的角色、组织、鬼名、专有道具或核心专有设定。"
+    }
+  ]
+}

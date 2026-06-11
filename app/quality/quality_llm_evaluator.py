@@ -47,6 +47,10 @@ class QualityLLMEvaluator:
         "low_scene_vividness",
         "unclear_character_goal",
         "poor_dialogue_voice",
+        "weak_protagonist_agency",
+        "information_without_action",
+        "missing_choice_consequence",
+        "abstract_or_soft_hook",
     }
 
     VALID_SUGGESTION_TYPES = {
@@ -402,6 +406,21 @@ class QualityLLMEvaluator:
         if "too_many_threads_opened" in flags:
             scores["suspense"] = 5
 
+        if "weak_protagonist_agency" in flags:
+            scores["character_depth"] = min(scores["character_depth"], 5)
+            scores["plot_progress"] = min(scores["plot_progress"], 5)
+
+        if "information_without_action" in flags:
+            scores["pacing"] = min(scores["pacing"], 5)
+            scores["plot_progress"] = min(scores["plot_progress"], 5)
+
+        if "missing_choice_consequence" in flags:
+            scores["conflict_strength"] = min(scores["conflict_strength"], 5)
+            scores["plot_progress"] = min(scores["plot_progress"], 5)
+
+        if "abstract_or_soft_hook" in flags:
+            scores["chapter_hook"] = min(scores["chapter_hook"], 5)
+
         problems = []
         for flag in flags:
             problem_type = self._flag_to_problem_type(flag)
@@ -436,6 +455,10 @@ class QualityLLMEvaluator:
             "low_plot_progress": "low_plot_progress",
             "too_many_threads_opened": "too_many_threads_opened",
             "no_thread_progress": "no_thread_progress",
+            "weak_protagonist_agency": "weak_protagonist_agency",
+            "information_without_action": "information_without_action",
+            "missing_choice_consequence": "missing_choice_consequence",
+            "abstract_or_soft_hook": "abstract_or_soft_hook",
         }
         return mapping.get(flag)
 
@@ -448,6 +471,10 @@ class QualityLLMEvaluator:
             "low_plot_progress": "plot_progress",
             "too_many_threads_opened": "suspense",
             "no_thread_progress": "plot_progress",
+            "weak_protagonist_agency": "character_depth",
+            "information_without_action": "plot_progress",
+            "missing_choice_consequence": "conflict_strength",
+            "abstract_or_soft_hook": "chapter_hook",
         }
         return mapping.get(flag, "")
 
@@ -460,5 +487,9 @@ class QualityLLMEvaluator:
             "low_plot_progress": "本章没有发现新线索，剧情推进有限。",
             "too_many_threads_opened": "本章开启了过多的悬念线，可能导致读者困惑。",
             "no_thread_progress": "本章没有推进任何已有的悬念线。",
+            "weak_protagonist_agency": "主角主动性不足，章节主要依赖观察、等待或接收信息。",
+            "information_without_action": "信息或线索没有转化为行动、判断变化或局势变化。",
+            "missing_choice_consequence": "本章缺少明确选择、风险或后果，剧情状态变化不足。",
+            "abstract_or_soft_hook": "章尾钩子偏抽象或偏软，缺少具体可感知变化。",
         }
         return mapping.get(flag, f"检测到潜在问题: {flag}")

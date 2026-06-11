@@ -66,6 +66,7 @@ export const simulationsApi = {
 }
 
 export const novelRunsApi = {
+  list: () => apiRequest('/novel-runs'),
   create: (payload) => apiRequest('/novel-runs', { method: 'POST', body: payload }),
   get: (longRunId) => apiRequest(`/novel-runs/${encodeURIComponent(longRunId)}`),
   plan: (longRunId) => apiRequest(`/novel-runs/${encodeURIComponent(longRunId)}/plan`),

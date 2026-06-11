@@ -1,8 +1,0 @@
-{
-  "truth_chain": [
-    {"id": "truth_001", "summary": "雾灯会在固定时间触发存在抹除判定", "revealed_by": ["clue_fog_lamp_time"]},
-    {"id": "truth_002", "summary": "被雾灯影响者会先从记录和记忆中逐步消失", "revealed_by": ["clue_erased_passenger_order", "clue_registry_page_fades"]},
-    {"id": "truth_003", "summary": "夜巡局曾经尝试封存雾灯但失败", "revealed_by": ["clue_bureau_failed_seal"]},
-    {"id": "truth_004", "summary": "沈默母亲的语音背景来自地下档案室", "revealed_by": ["clue_mother_voice_background"]}
-  ]
-}

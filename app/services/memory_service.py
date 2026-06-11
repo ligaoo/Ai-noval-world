@@ -18,10 +18,11 @@ class MemoryService:
     - 基于 tags 的检索（无向量库）
     """
 
-    def __init__(self, sim_dir: Path, world: WorldConfig):
+    def __init__(self, sim_dir: Path, world: WorldConfig, memory_file: Optional[Path] = None):
         self.sim_dir = sim_dir
         self.world = world
-        self.memories_file = sim_dir / "memories.jsonl"
+        self.memories_file = memory_file or (sim_dir / "memories.jsonl")
+        self.memories_file.parent.mkdir(parents=True, exist_ok=True)
         self._memories: List[Memory] = []
         self._load_existing()
 

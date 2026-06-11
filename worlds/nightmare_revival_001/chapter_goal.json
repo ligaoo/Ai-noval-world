@@ -1,0 +1,45 @@
+{
+  "goal": "顾行舟在旧河公寓走廊确认梦中401门牌和三次敲门声正在污染现实；他遇见民间幸存者林述夜并得知守夜规则可能有误；眠管所外勤孟乔介入，试图回收半页监护记录。第一章结尾只抛出第二晚梦境/末班车站钩子，不进入夜门内部、停用住院楼或不存在四楼。",
+  "pov": "char_gu_xingzhou",
+  "start_time": "day1_05:17",
+  "target_progress": 100,
+  "tick_limit": 36,
+  "no_progress_limit": 5,
+  "required_beats": [
+    "顾行舟检查自家门外的错误门牌401，确认它来自昨晚梦境",
+    "顾行舟播放手机里的敲门录音，发现录音正在变短",
+    "林述夜出现并阻止顾行舟独自回屋补觉",
+    "两人在停业睡眠诊所发现互相矛盾的守夜规则",
+    "孟乔以眠管所外勤身份介入，试图回收半页监护记录",
+    "结尾钩子：末班车站显示目的地为‘四楼’，但第一章不前往住院楼"
+  ],
+  "must_discover_clues": [
+    "clue_wrong_doorplate",
+    "clue_three_knocks",
+    "clue_wrong_rules"
+  ],
+  "optional_suspicions_only": [
+    "clue_sleep_tally_cost",
+    "clue_fourth_floor_bus"
+  ],
+  "forbidden_early_reveals": [
+    "不要解释夜门完整机制",
+    "不要展示夜门内部",
+    "不要进入停用住院楼或不存在四楼",
+    "不要确认第四晚被带走的人是否还能回来",
+    "不要完整说明睡眠账本用途和代价",
+    "不要让空病房呼叫铃实体化为怪物",
+    "不要让眠管所提供完全正确的规则",
+    "不要新增未授权钥匙、符纸、法器、武器或万能封印道具"
+  ],
+  "ending_hook": {
+    "type": "线索钩子",
+    "text": "末班车站的报站屏亮起：下一站，四楼。",
+    "related_thread_id": "thread_fourth_floor_bus"
+  },
+  "required_character_beats": [
+    {"character_id": "char_gu_xingzhou", "beat": "他不是英雄，只是不愿承认自己把第一名夜门接触者误诊为普通梦游。"},
+    {"character_id": "char_lin_shuye", "beat": "她阻止顾行舟，是因为她知道独自入睡会让门获得现实位置。"},
+    {"character_id": "char_meng_qiao", "beat": "她礼貌但强硬地回收记录，说明官方并不愿公开真相。"}
+  ]
+}

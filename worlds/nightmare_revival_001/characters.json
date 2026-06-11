@@ -1,0 +1,90 @@
+{
+  "characters": [
+    {
+      "id": "char_gu_xingzhou",
+      "character_id": "char_gu_xingzhou",
+      "name": "顾行舟",
+      "role": "protagonist",
+      "agent_type": "core_agent",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "apartment_corridor",
+      "location_id": "apartment_corridor",
+      "personality": {"traits": ["克制", "职业性冷静", "失眠", "负罪感强", "不轻信规则"]},
+      "traits": ["克制", "职业性冷静", "失眠", "负罪感强", "不轻信规则"],
+      "background": "旧河区第三医院前急诊医生。一次夜班抢救失败后，他开始反复梦见死者病历上没有登记过的门牌。辞职后他靠给私人诊所值夜班维生，但睡眠越来越短。",
+      "goals": {
+        "short_term": "确认自家门外出现的陌生门牌是否来自梦境异常",
+        "long_term": "找出夜门点名规律，救回被他误判为梦游症的幸存者"
+      },
+      "fears": ["自己已经在梦里死过一次", "清醒记忆不可信", "为了活下去必须牺牲同伴的睡眠"],
+      "secrets": ["他保存了无名病人死亡前的半页监护记录", "他已经连续两晚梦见同一扇门", "他不记得自己昨晚有没有真正醒来"],
+      "skills": {"observation": 78, "logic": 80, "social": 42, "courage": 66},
+      "drive": "他想证明这不是医疗事故后的幻觉，也想赎回自己漏掉的第一条规则。"
+    },
+    {
+      "id": "char_lin_shuye",
+      "character_id": "char_lin_shuye",
+      "name": "林述夜",
+      "role": "survivor_guide",
+      "agent_type": "core_agent",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "closed_sleep_clinic",
+      "location_id": "closed_sleep_clinic",
+      "personality": {"traits": ["警惕", "讥讽", "经验主义", "怕黑", "不愿解释完整规则"]},
+      "traits": ["警惕", "讥讽", "经验主义", "怕黑", "不愿解释完整规则"],
+      "background": "民间幸存者，曾在梦里打开过第二道门，因此失去了对家人面孔的记忆。她靠替人守夜换取线索，手里掌握一部分错误率很高的生存规则。",
+      "goals": {
+        "short_term": "判断顾行舟是否已经被夜门登记",
+        "long_term": "找到让自己不再做梦的方法"
+      },
+      "fears": ["第三道门", "熟人变成陌生人", "自己给出的规则害死人"],
+      "secrets": ["她曾故意让一名陌生人替自己入睡", "她知道睡眠账本在谁手里", "她梦里见过顾行舟的名字"],
+      "skills": {"observation": 72, "logic": 61, "social": 58, "courage": 70},
+      "drive": "她只相信活下来的规则，但不确定自己活下来的方式是否还能被原谅。"
+    },
+    {
+      "id": "char_meng_qiao",
+      "character_id": "char_meng_qiao",
+      "name": "孟乔",
+      "role": "sleep_control_fieldworker",
+      "agent_type": "core_agent",
+      "active_agent": true,
+      "visibility": "visible",
+      "initial_location": "closed_sleep_clinic",
+      "location_id": "closed_sleep_clinic",
+      "personality": {"traits": ["礼貌", "疲惫", "官样克制", "善于隐瞒", "底线摇摆"]},
+      "traits": ["礼貌", "疲惫", "官样克制", "善于隐瞒", "底线摇摆"],
+      "background": "眠管所外勤记录员，负责把夜门接触者登记为睡眠障碍患者。她知道官方规则不完整，却仍试图把顾行舟带进隔离流程。",
+      "goals": {
+        "short_term": "回收顾行舟手里的半页监护记录并阻止他公开异常",
+        "long_term": "建立一份不会被梦境改写的幸存者名单"
+      },
+      "fears": ["名单被梦改写", "隔离点全员入睡", "自己记录过的人集体消失"],
+      "secrets": ["她的睡眠时间每天少十二分钟", "她伪造过一次死亡证明来保护幸存者", "她不能连续看同一扇门超过七秒"],
+      "skills": {"observation": 68, "logic": 74, "social": 65, "courage": 60},
+      "drive": "她相信秩序能减少死亡，但已经见过秩序被梦境反过来利用。"
+    },
+    {
+      "id": "char_patient_bell",
+      "character_id": "char_patient_bell",
+      "name": "空病房呼叫铃",
+      "role": "absent_anchor",
+      "agent_type": "non_agent_anchor",
+      "active_agent": false,
+      "decision_enabled": false,
+      "simulation_role": "story_anchor_only",
+      "visibility": "absent",
+      "initial_location": "abandoned_ward_building",
+      "location_id": "abandoned_ward_building",
+      "personality": {"traits": ["重复", "微弱", "像人在水下按铃", "真假难辨"]},
+      "traits": ["重复", "微弱", "像人在水下按铃", "真假难辨"],
+      "background": "顾行舟夜班中听见的最后一声呼叫铃。它可能来自停用住院楼，也可能来自夜门后面。",
+      "goals": {"short_term": "让顾行舟注意到错误门牌", "long_term": "未知"},
+      "fears": [],
+      "secrets": ["铃声每响一次，现实里就少一段醒来的记忆"],
+      "skills": {"observation": 0, "logic": 0, "social": 0, "courage": 0}
+    }
+  ]
+}

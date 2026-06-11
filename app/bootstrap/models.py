@@ -73,6 +73,11 @@ class BootstrapLocation(BaseModel):
     public_description: str = ""
     objects: List[BootstrapLocationObject] = Field(default_factory=list)
     danger_level: int = 0
+    reveal_stage: str = "surface"
+    recommended_chapter_range: List[int] = Field(default_factory=list)
+    narrative_function: str = ""
+    unlock_condition: str = ""
+    associated_threads: List[str] = Field(default_factory=list)
 
 
 # ========== 9. TruthChainGenerator：真相链 ==========
@@ -129,6 +134,10 @@ class BootstrapClue(BaseModel):
     related_thread: str = ""
     discover_routes: List[DiscoverRoute] = Field(default_factory=list)
     on_discovered: OnDiscovered = Field(default_factory=OnDiscovered)
+    planned_chapters: List[int] = Field(default_factory=list)
+    evidence_ids: List[str] = Field(default_factory=list)
+    related_truth: str = ""
+    reveal_role: str = "introduce"
 
 
 # ========== 12. OpenThreadSeedGenerator：悬念池 ==========
@@ -212,6 +221,7 @@ class BootstrapSeed(BaseModel):
     user_seed: str
     target_genre: str = "horror_suspense"
     target_words: int = 100000
+    target_chapters: int = 30
     auto_confirm: bool = False
 
 
@@ -220,6 +230,8 @@ class BootstrapResult(BaseModel):
     world_id: str
     status: str = "candidate_generated"
     title: str = ""
+    target_words: int = 100000
+    target_chapters: int = 30
 
     world_bible: Dict[str, Any] = Field(default_factory=dict)
     characters: List[CharacterWithAgent] = Field(default_factory=list)

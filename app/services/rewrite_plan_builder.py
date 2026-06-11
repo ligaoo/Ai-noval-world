@@ -99,7 +99,13 @@ class RewritePlanBuilder:
     def _instruction_for(problem_type: str, message: str) -> str:
         lower = problem_type.lower()
         if "hook" in lower:
-            return "强化结尾钩子，用具体感官或动作收束，不新增线索。"
+            return "强化结尾钩子，用具体感官、动作、身份状态或局势变化收束，不新增线索。"
+        if "agency" in lower:
+            return "强化主角围绕当前目标的主动行动和判断变化，但不新增事件。"
+        if "information_without_action" in lower or "exposition" in lower:
+            return "减少解释性句子，把信息转化为动作、反应、判断变化或环境反馈。"
+        if "choice" in lower or "consequence" in lower:
+            return "突出已有行动中的选择压力和后果，让场景结束时状态发生变化。"
         if "pacing" in lower or "event_log" in lower:
             return "压缩流水账表达，把连续事件组织成场景动作。"
         if "atmosphere" in lower or "horror" in lower:

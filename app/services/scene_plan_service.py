@@ -23,7 +23,7 @@ class ScenePlanService:
         quality_controls=None,
     ) -> ScenePlan:
         event_map = {event.event_id: event for event in events}
-        selected = selected_events.selected_events
+        selected = self._dedupe_selected_events(selected_events.selected_events)
         groups = self._group_selected_events(selected)
         scenes: List[SceneSpec] = []
 
@@ -34,11 +34,12 @@ class ScenePlanService:
             primary = group_events[0]
             scene_id = f"scene_{index:03d}"
             scene_role = self._dominant_role([event.scene_role for event in group])
+            location_id = self._group_location_id(group, primary.location_id)
             scenes.append(
                 SceneSpec(
                     scene_id=scene_id,
                     scene_goal=self._scene_goal(scene_role, chapter_brief),
-                    location_id=primary.location_id,
+                    location_id=location_id,
                     pov_state=self._pov_state(primary),
                     conflict=self._conflict_for(scene_role, group_events),
                     event_ids=[event.event_id for event in group_events],
@@ -50,6 +51,11 @@ class ScenePlanService:
                     ),
                     emotional_turn=self._emotional_turn(scene_role),
                     ending_beat=self._ending_beat(group_events[-1], scene_role),
+                    protagonist_goal=self._protagonist_goal(scene_role, chapter_brief),
+                    obstacle_or_pressure=self._obstacle_or_pressure(scene_role, group_events),
+                    choice_or_test=self._choice_or_test(group_events),
+                    consequence_or_change=self._consequence_or_change(group_events),
+                    information_action_pair=self._information_action_pair(group_events),
                 )
             )
 
@@ -67,6 +73,7 @@ class ScenePlanService:
                 "selected_event_count": len(selected),
                 "compressed_event_count": len(selected_events.compressed_events),
                 "chapter_brief_version": chapter_brief.version,
+                "location_policy": self._location_policy_dict(chapter_brief),
             },
         )
 
@@ -85,18 +92,65 @@ class ScenePlanService:
         except Exception:
             return None
 
+    @classmethod
+    def _dedupe_selected_events(cls, selected) -> List:
+        result = []
+        seen = set()
+        for event in selected:
+            key = cls._selected_semantic_key(event)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(event)
+        return result
+
+    @staticmethod
+    def _selected_semantic_key(event) -> str:
+        reason = "".join(str(getattr(event, "reason", "") or "").split())[:80]
+        threads = ",".join(getattr(event, "thread_ids", []) or [])
+        return f"{getattr(event, 'scene_role', '')}|{threads}|{reason}"
+
     @staticmethod
     def _group_selected_events(selected) -> List[list]:
         if not selected:
             return []
-        target_scene_count = 1
-        if len(selected) >= 5:
-            target_scene_count = 2
-        if len(selected) >= 8:
-            target_scene_count = 3
-        target_scene_count = min(target_scene_count, 4)
-        chunk_size = max(1, (len(selected) + target_scene_count - 1) // target_scene_count)
-        return [selected[i:i + chunk_size] for i in range(0, len(selected), chunk_size)][:4]
+        groups: List[list] = []
+        current: List = []
+        current_location = None
+        for event in selected:
+            location_id = getattr(event, "location_id", "") or "unknown"
+            if current and location_id != current_location:
+                groups.append(current)
+                current = []
+            current.append(event)
+            current_location = location_id
+        if current:
+            groups.append(current)
+        if len(groups) <= 4:
+            return groups
+        merged = groups[:3]
+        tail = []
+        for group in groups[3:]:
+            tail.extend(group)
+        merged.append(tail)
+        return merged
+
+    @staticmethod
+    def _group_location_id(group, fallback: str = "") -> str:
+        for event in group:
+            location_id = getattr(event, "location_id", "") or ""
+            if location_id:
+                return location_id
+        return fallback or ""
+
+    @staticmethod
+    def _location_policy_dict(chapter_brief: ChapterBrief) -> Dict[str, List[str]]:
+        policy = getattr(chapter_brief, "location_policy", None)
+        if not policy:
+            return {}
+        if hasattr(policy, "model_dump"):
+            return policy.model_dump()
+        return dict(policy) if isinstance(policy, dict) else {}
 
     @staticmethod
     def _dominant_role(roles: List[str]) -> str:
@@ -158,3 +212,76 @@ class ScenePlanService:
         if scene_role == "escalation":
             return "以风险继续逼近的具体动作或感官变化收束。"
         return f"以未解释的异常细节收束：{event.result[:80]}"
+
+    @staticmethod
+    def _protagonist_goal(scene_role: str, chapter_brief: ChapterBrief) -> str:
+        if chapter_brief.chapter_goal:
+            return chapter_brief.chapter_goal
+        return {
+            "setup": "明确当前处境，并找到下一步可执行目标。",
+            "escalation": "在风险升高时保住当前目标。",
+            "reveal": "验证新信息是否能改变下一步行动。",
+            "misdirection": "判断可见事实中哪些部分不可靠。",
+            "relationship_turn": "在信息差中争取主动。",
+        }.get(scene_role, "推动本章主目标。")
+
+    @staticmethod
+    def _obstacle_or_pressure(scene_role: str, events: List[EventLog]) -> str:
+        pressure_event = max(
+            events,
+            key=lambda event: event.plot_value.conflict + event.plot_value.danger + event.plot_value.relationship,
+        )
+        if pressure_event.plot_value.conflict > 0:
+            return f"冲突压力来自：{pressure_event.result[:80]}"
+        if pressure_event.plot_value.danger > 0:
+            return f"风险压力来自：{pressure_event.result[:80]}"
+        if pressure_event.plot_value.relationship > 0:
+            return f"关系压力来自：{pressure_event.result[:80]}"
+        return {
+            "reveal": "新信息尚无法完全确认，角色必须在不确定中行动。",
+            "misdirection": "可见事实可能误导判断。",
+            "setup": "当前目标和现场表象之间仍有缺口。",
+        }.get(scene_role, "场景需要形成可感知阻力。")
+
+    @staticmethod
+    def _choice_or_test(events: List[EventLog]) -> str:
+        risky = [event for event in events if event.action and event.action.risk_level in {"medium", "high"}]
+        if risky:
+            event = risky[0]
+            intent = event.action.intent or event.action.method or event.result
+            return f"角色采取带风险的行动：{intent[:80]}"
+        acted = [event for event in events if event.action and event.action.action_type not in {"observe", "wait"}]
+        if acted:
+            event = acted[0]
+            intent = event.action.intent or event.action.method or event.result
+            return f"角色通过行动推进判断：{intent[:80]}"
+        return "把观察结果转化为一个明确判断、试探或下一步选择。"
+
+    @staticmethod
+    def _consequence_or_change(events: List[EventLog]) -> str:
+        for event in events:
+            if event.discovered_facts:
+                return f"新增事实改变判断：{', '.join(event.discovered_facts[:3])}"
+            if event.hidden_effects:
+                return f"事件留下隐性后果：{'; '.join(event.hidden_effects[:2])}"
+            if event.plot_value.relationship > 0:
+                return f"人物关系压力发生变化：{event.result[:80]}"
+            if event.plot_value.danger > 0:
+                return f"风险状态发生变化：{event.result[:80]}"
+            if event.plot_value.progress > 0:
+                return f"剧情状态发生变化：{event.result[:80]}"
+        return "本场景结束时应让目标、风险、关系或信息状态至少改变一项。"
+
+    @staticmethod
+    def _information_action_pair(events: List[EventLog]) -> str:
+        info_event = next((event for event in events if event.discovered_facts or event.plot_value.progress > 0), None)
+        action_event = next((event for event in events if event.action and event.action.action_type not in {"observe", "wait"}), None)
+        if info_event and action_event:
+            action_text = action_event.action.intent or action_event.action.method or action_event.result
+            return f"信息“{info_event.result[:60]}”需要推动行动“{action_text[:60]}”。"
+        if info_event:
+            return f"信息“{info_event.result[:80]}”需要引发反应、判断变化或下一步行动。"
+        if action_event:
+            action_text = action_event.action.intent or action_event.action.method or action_event.result
+            return f"行动“{action_text[:80]}”需要带来可见信息或局势变化。"
+        return "避免只展示信息；让信息、行动和变化形成因果。"

@@ -1,0 +1,47 @@
+{
+  "min_characters": 3,
+  "min_locations": 4,
+  "min_clues": 5,
+  "quality_threshold": 78,
+  "style_focus": ["规则灵异清晰", "梦魇侵袭", "现实污染", "角色代价", "信息递进", "克制文风", "章节钩子"],
+  "avoid": [
+    "直接套用已有作品专有设定",
+    "把异常写成普通鬼追人",
+    "第一章过早讲清完整规则",
+    "角色无代价使用异常能力",
+    "眠管所成为万能官方外挂",
+    "第一章进入夜门内部、住院楼深处或不存在四楼",
+    "连续形容词堆叠",
+    "密集比喻",
+    "新增钥匙、符纸、法器、武器、万能封印道具",
+    "超过7500字仍继续扩写"
+  ],
+  "must_have": [
+    "每个异常表现都服务于规则或误导规则",
+    "线索发现要推动下一步行动",
+    "恐怖氛围来自醒后现实被梦补全的细节",
+    "保持原创地名、机构、角色和异常",
+    "第一章至少发现 clue_wrong_doorplate 与 clue_three_knocks",
+    "结尾保留 fourth_floor_bus 钩子",
+    "林述夜和孟乔都必须制造阻碍或信息差，不只是说明 NPC"
+  ],
+  "chapter_one_policy": {
+    "target_length": "6000-7500 Chinese characters",
+    "allowed_locations": ["apartment_corridor", "closed_sleep_clinic"],
+    "mention_only_locations": ["night_bus_stop", "sleep_control_archive", "abandoned_ward_building"],
+    "hard_forbidden_locations": ["night_door_inside", "nonexistent_fourth_floor", "deep_ward_corridor"],
+    "must_discover_clues": ["clue_wrong_doorplate", "clue_three_knocks", "clue_wrong_rules"],
+    "suspect_only_clues": ["clue_sleep_tally_cost", "clue_fourth_floor_bus"],
+    "forbidden_full_explanations": ["夜门完整机制", "睡眠账本完整代价", "第四晚结局", "眠管所真实目的", "空病房呼叫铃来源"],
+    "ending_boundary": "停在末班车站/第二晚梦境钩子，不进入住院楼、不打开夜门。"
+  },
+  "faithfulness_whitelist_keywords": [
+    "门牌", "401", "湿脚印", "脚印", "水痕", "监护记录", "病历纸", "敲门录音", "录音", "睡眠报告", "脑电仪", "账本", "复写页", "规则", "便签", "名单", "登记表", "病例夹", "档案", "钟表", "报站屏", "车票", "呼叫铃"
+  ],
+  "style_rules": {
+    "max_metaphor_per_three_paragraphs": 1,
+    "max_core_modifier_per_paragraph": 1,
+    "prefer": ["动作", "对白", "可检查物证", "角色选择", "短句"],
+    "avoid": ["抽象解释", "连续像……像……", "氛围重复描写", "长段心理说明"]
+  }
+}

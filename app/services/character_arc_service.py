@@ -42,7 +42,8 @@ class CharacterArcService:
         with open(arcs_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        for char_data in data.get("characters", []):
+        character_items = data.get("characters") or data.get("arcs") or []
+        for char_data in character_items:
             arc = CharacterArc.model_validate(char_data)
             self.character_arcs[arc.character_id] = arc
 

@@ -1,0 +1,75 @@
+{
+  "locations": [
+    {
+      "id": "apartment_corridor",
+      "location_id": "apartment_corridor",
+      "name": "旧河公寓走廊",
+      "public_description": "顾行舟住处外的狭长走廊，声控灯经常慢半拍亮起。门口地砖在清晨会出现不属于任何住户的湿脚印，尽头墙面多出一块陌生门牌。",
+      "connected_to": ["closed_sleep_clinic", "night_bus_stop"],
+      "objects": [
+        {"id": "wrong_doorplate_401", "object_id": "wrong_doorplate_401", "name": "错误门牌401", "aliases": ["门牌", "401", "陌生门牌"], "visible": true, "state": "挂在不该有门的位置，边缘有水珠"},
+        {"id": "wet_footprints", "object_id": "wet_footprints", "name": "湿脚印", "aliases": ["脚印", "水痕", "湿痕"], "visible": true, "state": "从顾行舟门口延伸到走廊尽头，但没有返回痕迹"},
+        {"id": "half_monitor_record", "object_id": "half_monitor_record", "name": "半页监护记录", "aliases": ["监护记录", "病历纸", "半页纸"], "visible": true, "state": "心率曲线在死亡时间后继续跳了七下"},
+        {"id": "door_audio_on_phone", "object_id": "door_audio_on_phone", "name": "手机里的敲门录音", "aliases": ["录音", "敲门声", "手机音频"], "visible": true, "state": "每次播放都会少一秒"}
+      ],
+      "available_topics": ["错误门牌", "湿脚印", "敲门声", "监护记录", "第二晚梦境"],
+      "danger_level": 4
+    },
+    {
+      "id": "closed_sleep_clinic",
+      "location_id": "closed_sleep_clinic",
+      "name": "停业睡眠诊所",
+      "public_description": "旧河区一家已经停业的睡眠障碍诊所，窗户被报纸封住，屋里摆着几张旧躺椅和一台仍会打印空白报告的脑电仪。",
+      "connected_to": ["apartment_corridor", "sleep_control_archive"],
+      "objects": [
+        {"id": "old_eeg_machine", "object_id": "old_eeg_machine", "name": "旧脑电仪", "aliases": ["脑电仪", "打印机", "睡眠报告"], "visible": true, "state": "未接线也会吐出一张写着入睡时间的纸"},
+        {"id": "sleep_tally_copy", "object_id": "sleep_tally_copy", "name": "睡眠账本复写页", "aliases": ["账本", "复写页", "入睡记录"], "visible": true, "state": "只能看到前三行名字，第四行被水泡开"},
+        {"id": "covered_mirror", "object_id": "covered_mirror", "name": "蒙布镜子", "aliases": ["镜子", "白布", "倒影"], "visible": true, "state": "白布下面偶尔映出走廊而不是诊所"},
+        {"id": "clinic_wall_rules", "object_id": "clinic_wall_rules", "name": "墙上的守夜规则", "aliases": ["规则", "便签", "守夜提示"], "visible": true, "state": "第一条和第三条互相矛盾"}
+      ],
+      "available_topics": ["守夜规则", "睡眠账本", "林述夜的经历", "眠管所", "错误规则"],
+      "danger_level": 3
+    },
+    {
+      "id": "night_bus_stop",
+      "location_id": "night_bus_stop",
+      "name": "末班车站",
+      "public_description": "旧河区河堤旁的公交站，末班车早已取消，但午夜后站牌会显示一辆开往“不存在四楼”的车还有四分钟到站。",
+      "connected_to": ["apartment_corridor", "abandoned_ward_building"],
+      "objects": [
+        {"id": "wrong_bus_display", "object_id": "wrong_bus_display", "name": "错误报站屏", "aliases": ["报站屏", "站牌", "末班车"], "visible": true, "state": "目的地一栏显示：四楼"},
+        {"id": "damp_transfer_ticket", "object_id": "damp_transfer_ticket", "name": "潮湿换乘票", "aliases": ["车票", "换乘票", "潮湿票根"], "visible": true, "state": "票面写着顾行舟昨晚梦见的门牌"},
+        {"id": "empty_shelter_bench", "object_id": "empty_shelter_bench", "name": "空候车椅", "aliases": ["长椅", "候车椅"], "visible": true, "state": "椅面有刚睡醒的人形水印"}
+      ],
+      "available_topics": ["末班车", "不存在四楼", "梦中路线", "潮湿车票"],
+      "danger_level": 4
+    },
+    {
+      "id": "sleep_control_archive",
+      "location_id": "sleep_control_archive",
+      "name": "眠管所临时档案点",
+      "public_description": "设在旧商场二层的临时办公室，货架上堆着睡眠筛查表。所有钟表都停在凌晨三点零七分。",
+      "connected_to": ["closed_sleep_clinic"],
+      "objects": [
+        {"id": "survivor_name_list", "object_id": "survivor_name_list", "name": "幸存者名单", "aliases": ["名单", "登记表", "筛查表"], "visible": true, "state": "部分名字被铅笔划掉，又在纸背面重新出现"},
+        {"id": "redacted_case_file", "object_id": "redacted_case_file", "name": "涂黑病例夹", "aliases": ["病例夹", "档案", "涂黑记录"], "visible": true, "state": "关键页被黑色记号笔涂掉，只剩日期"},
+        {"id": "stopped_clocks", "object_id": "stopped_clocks", "name": "停住的钟", "aliases": ["钟表", "挂钟", "时间"], "visible": true, "state": "每个钟停在三点零七分，但秒针偶尔倒走"}
+      ],
+      "available_topics": ["眠管所", "幸存者名单", "隔离流程", "错误病例"],
+      "danger_level": 2
+    },
+    {
+      "id": "abandoned_ward_building",
+      "location_id": "abandoned_ward_building",
+      "name": "停用住院楼",
+      "public_description": "旧河区第三医院后方封闭的住院楼，公开记录只有三层，但许多梦境都指向不存在的四楼。第一章只能远望或提及，不能进入。",
+      "connected_to": ["night_bus_stop"],
+      "objects": [
+        {"id": "dark_fourth_floor_window", "object_id": "dark_fourth_floor_window", "name": "第四层黑窗", "aliases": ["四楼", "黑窗", "不存在四楼"], "visible": true, "state": "从楼外数不出第四层，但玻璃倒影里有"},
+        {"id": "ward_call_bell", "object_id": "ward_call_bell", "name": "空病房呼叫铃", "aliases": ["呼叫铃", "铃声", "病房铃"], "visible": true, "state": "凌晨会响七下"}
+      ],
+      "available_topics": ["不存在四楼", "无名病人", "呼叫铃", "旧医院"],
+      "danger_level": 5
+    }
+  ]
+}

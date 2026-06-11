@@ -35,6 +35,7 @@ class AgentContext:
     location_public_description: str
     connected_locations: List[str]
     available_targets: List[str]
+    available_character_targets: List[str]
     available_topics_by_target: Dict[str, List[str]]
 
     # 记忆（无默认值）
@@ -99,6 +100,7 @@ class AgentContext:
             "visible_environment": {
                 "description": self.location_public_description,
                 "available_targets": self.available_targets,
+                "available_character_targets": self.available_character_targets,
                 "available_topics_by_target": self.available_topics_by_target,
                 "available_moves": self.connected_locations,
             },
@@ -275,9 +277,11 @@ class CharacterAgentService:
 
         # 可用 targets：本地点 objects + 在场角色 + 运行时解锁的目标
         targets: List[str] = [o.id for o in loc.objects]
+        character_targets: List[str] = []
         for other_id, other_state in state.characters.items():
             if other_state.location_id == runtime.location_id and other_id != agent_id:
                 targets.append(other_id)
+                character_targets.append(other_id)
 
         # 添加运行时解锁的目标（由 Director 干预创建）
         for obj_id, obj_data in state.world.objects.items():
@@ -358,6 +362,7 @@ class CharacterAgentService:
             recent_events=last_events_text[-8:],
             relevant_memories=relevant_memories,
             available_targets=targets,
+            available_character_targets=character_targets,
             available_topics_by_target=topics_by_target,
             available_actions=[a for a in self.ACTIONS_V23],
             soft_hints=list(state.world.soft_hints[-2:]),
@@ -838,7 +843,8 @@ class CharacterAgentService:
 
         lines.append("【可用动作】" + " / ".join(ctx.available_actions))
         lines.append("【可用目标(target)】" + " / ".join(ctx.available_targets))
-        lines.append("【target选择规则】move.target 只能从可移动地点中选择；observe/inspect/search/wait.target 从可用目标中选择；ask/talk.target 必须是在场角色 ID；禁止使用中文地点名作为 target。")
+        lines.append("【在场角色目标(ask/talk only)】" + (" / ".join(ctx.available_character_targets) if ctx.available_character_targets else "无"))
+        lines.append("【target选择规则】move.target 只能从可移动地点中选择；observe/inspect/search/wait.target 从可用目标中选择；ask/talk.target 必须从【在场角色目标】中选择。若在场角色目标为“无”，禁止输出 ask/talk。禁止使用中文地点名作为 target。")
 
         if ctx.available_topics_by_target:
             lines.append("【可问 topic（按 target 分组）】")

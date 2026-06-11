@@ -16,7 +16,7 @@ class OpenThreadSeedGenerator:
     def __init__(self, llm_client=None):
         self.llm_client = llm_client
 
-    def generate(self, parsed: ParsedSeed) -> List[OpenThread]:
+    def generate(self, parsed: ParsedSeed, target_chapters: int = 30) -> List[OpenThread]:
         if self.llm_client:
             threads = self._generate_with_llm(parsed)
             if threads:
@@ -35,7 +35,7 @@ ParsedSeed:
 {json.dumps(parsed.model_dump(), ensure_ascii=False, indent=2)}
 
 硬性要求：
-- 返回 JSON object，格式为 {"open_threads": [...]}，数组中每项字段：thread_id, question, priority, status, opened_at_chapter, related_evidence_ids, thread_type, motif, thematic_keyword, payoff_hint。
+- 返回 JSON object，格式为 {{"open_threads": [...]}}，数组中每项字段：thread_id, question, priority, status, opened_at_chapter, related_evidence_ids, thread_type, motif, thematic_keyword, payoff_hint。
 - 至少 3 条，status 固定 open，opened_at_chapter 固定 1。
 - 如果 ParsedSeed 有 core_motif 或 motif_keywords，必须生成 1 条 thread_type=thematic 的主题悬念，追问这个母题如何改变角色对处境、目标或彼此可信度的理解。
 - thread_id 使用稳定英文 id，不要把中文剧情词直接拼入 id。

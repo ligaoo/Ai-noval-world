@@ -4,6 +4,7 @@ import json
 import re
 from typing import Optional
 
+from .long_form_pacing import window_for_stage
 from .models import ParsedSeed, TruthChain, TruthRevealStage
 
 
@@ -16,17 +17,17 @@ class TruthChainGenerator:
     def __init__(self, llm_client=None):
         self.llm_client = llm_client
 
-    def generate(self, parsed: ParsedSeed) -> TruthChain:
+    def generate(self, parsed: ParsedSeed, target_chapters: int = 30) -> TruthChain:
         if self.llm_client:
-            truth = self._generate_with_llm(parsed)
+            truth = self._generate_with_llm(parsed, target_chapters)
             if truth:
                 return truth
 
         if parsed.cast_mode == "ensemble_survival":
-            return self._generate_ensemble_fallback(parsed)
-        return self._generate_mystery_fallback(parsed)
+            return self._generate_ensemble_fallback(parsed, target_chapters)
+        return self._generate_mystery_fallback(parsed, target_chapters)
 
-    def _generate_with_llm(self, parsed: ParsedSeed) -> Optional[TruthChain]:
+    def _generate_with_llm(self, parsed: ParsedSeed, target_chapters: int) -> Optional[TruthChain]:
         system = "你是真相链生成器，必须返回 JSON object，不要输出额外解释。"
         user = f"""
 请基于 ParsedSeed 生成长篇悬疑/恐怖故事的 truth_chain。
@@ -37,6 +38,7 @@ ParsedSeed:
 硬性要求：
 - 返回字段：truth_id, final_truth, reveal_steps。
 - reveal_steps 必须包含 surface / partial / major / truth 四阶段。
+- 所有 chapter_range 必须落在 1..{target_chapters}，并按长篇节奏分布，不要固定写 25-30。
 - 每个阶段字段：stage, chapter_range, allowed_information, forbidden_information。
 - final_truth 必须从 ParsedSeed 的地点、异常、故事类型、群像/单人结构推导；信息不足时可自行补全，但不要固定成十年前事故、医院旧案、失踪亲友真相。
 - surface 阶段只能允许可观察现象，不直接揭示根因。
@@ -54,11 +56,15 @@ ParsedSeed:
         except Exception:
             return None
 
-    def _generate_ensemble_fallback(self, parsed: ParsedSeed) -> TruthChain:
+    def _generate_ensemble_fallback(self, parsed: ParsedSeed, target_chapters: int = 30) -> TruthChain:
         location = parsed.core_location or "核心地点"
         supernatural = parsed.supernatural_element or "异常规则"
         group_goal = parsed.group_goal or "共同寻找离开办法"
         stakes = parsed.survival_stakes or "群体选择会改变每个人的风险"
+        surface_window = window_for_stage(target_chapters, "surface")
+        partial_window = window_for_stage(target_chapters, "partial")
+        major_window = window_for_stage(target_chapters, "major")
+        truth_window = window_for_stage(target_chapters, "truth")
 
         return TruthChain(
             truth_id=f"truth_{parsed.bootstrap_template or 'ensemble'}",
@@ -69,7 +75,7 @@ ParsedSeed:
             reveal_steps=[
                 TruthRevealStage(
                     stage="surface",
-                    chapter_range=[1, 5],
+                    chapter_range=surface_window,
                     allowed_information=[
                         f"{location}的边界或出口不再符合正常经验",
                         "多个可见角色的观察彼此矛盾，但都能被现场痕迹部分验证",
@@ -82,7 +88,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="partial",
-                    chapter_range=[6, 15],
+                    chapter_range=partial_window,
                     allowed_information=[
                         f"{supernatural}会回应群体内部的选择和冲突",
                         f"{group_goal}需要可验证线索，而不是只靠直觉",
@@ -94,7 +100,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="major",
-                    chapter_range=[16, 24],
+                    chapter_range=major_window,
                     allowed_information=[
                         "未公开行动者一直在改变线索出现顺序",
                         "至少一个成员的隐瞒会影响所有人的生存路径",
@@ -105,7 +111,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="truth",
-                    chapter_range=[25, 30],
+                    chapter_range=truth_window,
                     allowed_information=[
                         f"{supernatural}的真实运行机制",
                         "未公开行动者影响群体的原因",
@@ -116,10 +122,14 @@ ParsedSeed:
             ],
         )
 
-    def _generate_mystery_fallback(self, parsed: ParsedSeed) -> TruthChain:
+    def _generate_mystery_fallback(self, parsed: ParsedSeed, target_chapters: int = 30) -> TruthChain:
         location = parsed.core_location or "核心地点"
         missing = parsed.missing_person or "关键缺口"
         supernatural = parsed.supernatural_element or "异常现象"
+        surface_window = window_for_stage(target_chapters, "surface")
+        partial_window = window_for_stage(target_chapters, "partial")
+        major_window = window_for_stage(target_chapters, "major")
+        truth_window = window_for_stage(target_chapters, "truth")
 
         return TruthChain(
             truth_id=f"truth_{parsed.bootstrap_template or 'main'}",
@@ -130,7 +140,7 @@ ParsedSeed:
             reveal_steps=[
                 TruthRevealStage(
                     stage="surface",
-                    chapter_range=[1, 5],
+                    chapter_range=surface_window,
                     allowed_information=[
                         f"{location}近期仍有活动痕迹",
                         f"{missing}可能与{location}发生过交集",
@@ -143,7 +153,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="partial",
-                    chapter_range=[6, 15],
+                    chapter_range=partial_window,
                     allowed_information=[
                         f"{supernatural}与过去被隐瞒的关键事件有关",
                         "有人在刻意改变或移走记录",
@@ -155,7 +165,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="major",
-                    chapter_range=[16, 24],
+                    chapter_range=major_window,
                     allowed_information=[
                         f"{missing}曾接近核心真相",
                         "主角的目标与未公开行动者的目标发生直接冲突",
@@ -166,7 +176,7 @@ ParsedSeed:
                 ),
                 TruthRevealStage(
                     stage="truth",
-                    chapter_range=[25, 30],
+                    chapter_range=truth_window,
                     allowed_information=[
                         f"{supernatural}的真实来源",
                         "未公开行动者的真实目的",

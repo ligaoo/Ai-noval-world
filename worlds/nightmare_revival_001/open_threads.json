@@ -1,0 +1,25 @@
+{
+  "threads": [
+    {
+      "thread_id": "thread_night_door_registration",
+      "question": "顾行舟是否已经被夜门登记？",
+      "status": "open",
+      "opened_in_chapter": 1,
+      "related_clues": ["clue_wrong_doorplate", "clue_three_knocks"]
+    },
+    {
+      "thread_id": "thread_false_rules",
+      "question": "墙上的守夜规则为什么互相矛盾？",
+      "status": "open",
+      "opened_in_chapter": 1,
+      "related_clues": ["clue_wrong_rules"]
+    },
+    {
+      "thread_id": "thread_fourth_floor_bus",
+      "question": "末班车站为什么会显示目的地为不存在的四楼？",
+      "status": "open",
+      "opened_in_chapter": 1,
+      "related_clues": ["clue_fourth_floor_bus"]
+    }
+  ]
+}

@@ -52,6 +52,20 @@
     "max_new_threads_per_chapter": 2,
     "stale_chapter_threshold": 2
   },
+  "generic_narrative_quality": {
+    "chapter_requirements": [
+      "每章要有明确的短期目标",
+      "重要信息必须引发行动、反应或局势变化",
+      "至少存在阻力、选择或代价之一",
+      "章尾钩子必须落在具体可感知变化上",
+      "连续性摘要必须记录本章造成的变化"
+    ],
+    "avoid": [
+      "只展示设定而不改变局面",
+      "连续观察、询问或解释却缺少行动后果",
+      "用抽象总结代替具体章尾钩子"
+    ]
+  },
   "forbidden_patterns": [
     "突然出现毫无铺垫的解决方案",
     "关键角色性格突变无合理理由",

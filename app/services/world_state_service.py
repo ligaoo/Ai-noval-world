@@ -106,6 +106,41 @@ class WorldStateService:
             ),
         )
 
+    def continue_state(
+        self,
+        previous_state: WorldState,
+        simulation_id: str,
+        world: WorldConfig,
+        seed: int,
+        chapter_goal_text: str,
+    ) -> WorldState:
+        state = self.init_state(simulation_id=simulation_id, world=world, seed=seed)
+        state.world_time = previous_state.world_time
+        state.chapter_goal_status = ChapterGoalStatus(
+            goal=chapter_goal_text or world.chapter_goal.goal,
+            completed=False,
+            progress=0,
+        )
+        state.no_progress_ticks = 0
+
+        for character_id, previous_character in previous_state.characters.items():
+            state.characters[character_id] = previous_character.model_copy(deep=True)
+            state.characters[character_id].last_action = None
+            state.characters[character_id].repeat_action_count = 0
+            state.characters[character_id].last_intent_signature = None
+
+        baseline_world = state.world
+        state.world = previous_state.world.model_copy(deep=True)
+        for fact_id, discovered in baseline_world.discovered_facts.items():
+            state.world.discovered_facts.setdefault(fact_id, discovered)
+        for object_id, obj in baseline_world.objects.items():
+            state.world.objects.setdefault(object_id, obj)
+        for fact_id, exposure in baseline_world.fact_exposure.items():
+            state.world.fact_exposure.setdefault(fact_id, exposure)
+        state.world.soft_hints = []
+        state.world.pending_key_events = []
+        return state
+
     def _runtime_goals_from_profile(self, character_id: str, goals: Dict[str, object]) -> Dict[str, GoalRuntimeState]:
         runtime_goals: Dict[str, GoalRuntimeState] = {}
         priority = 10

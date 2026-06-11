@@ -69,6 +69,10 @@ class QualityProblemClassifier:
         "missing_thematic_thread": {"base_severity": "medium", "score_threshold": 6},
         "abstract_ending_hook": {"base_severity": "high", "score_threshold": 6},
         "ai_summary_phrase": {"base_severity": "medium", "score_threshold": 7},
+        "weak_protagonist_agency": {"base_severity": "high", "score_threshold": 6},
+        "information_without_action": {"base_severity": "high", "score_threshold": 6},
+        "missing_choice_consequence": {"base_severity": "medium", "score_threshold": 5},
+        "abstract_or_soft_hook": {"base_severity": "high", "score_threshold": 6},
     }
 
     PROBLEM_DIMENSION_MAPPING = {
@@ -103,6 +107,10 @@ class QualityProblemClassifier:
         "missing_thematic_thread": "suspense",
         "abstract_ending_hook": "chapter_hook",
         "ai_summary_phrase": "style_consistency",
+        "weak_protagonist_agency": "character_depth",
+        "information_without_action": "plot_progress",
+        "missing_choice_consequence": "conflict_strength",
+        "abstract_or_soft_hook": "chapter_hook",
     }
 
     PROBLEM_PRIORITY_WEIGHTS = {
@@ -137,6 +145,10 @@ class QualityProblemClassifier:
         "missing_thematic_thread": 7,
         "abstract_ending_hook": 8,
         "ai_summary_phrase": 6,
+        "weak_protagonist_agency": 9,
+        "information_without_action": 9,
+        "missing_choice_consequence": 8,
+        "abstract_or_soft_hook": 8,
     }
 
     def classify_problems(

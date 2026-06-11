@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.models.reveal_budget import AllowedReveal, ForbiddenReveal, PayoffTarget, RevealBudget, SuspectedOnly
 from app.models.world import WorldConfig
@@ -12,16 +12,23 @@ class RevealBudgetService:
     def __init__(self, world: WorldConfig):
         self.world = world
 
-    def build(self, chapter_no: int = 1, target_chapters: int = 10) -> RevealBudget:
+    def build(self, chapter_no: int = 1, target_chapters: int = 30, chapter_function: Optional[Dict[str, Any]] = None) -> RevealBudget:
+        chapter_function = chapter_function or {}
         allowed: List[AllowedReveal] = []
         suspected: List[SuspectedOnly] = []
         forbidden: List[ForbiddenReveal] = []
         questions: List[str] = []
         payoff_targets: List[PayoffTarget] = []
 
+        for fact in chapter_function.get("allowed_reveals") or []:
+            allowed.append(AllowedReveal(fact=str(fact), level=str(chapter_function.get("truth_stage") or "surface"), source="chapter_function"))
+        planned_clues = set(str(item) for item in chapter_function.get("planned_clues") or [])
+
         for clue in sorted(self.world.clues.clues, key=lambda item: item.importance, reverse=True):
             fact = clue.bootstrap_fact or clue.content or clue.name
-            if clue.truth_level in {"visible_fact", "surface", "minor"} and len(allowed) < 3:
+            if clue.id in planned_clues and len(allowed) < 4:
+                allowed.append(AllowedReveal(fact=fact, level=str(chapter_function.get("truth_stage") or "surface"), source=clue.id))
+            elif clue.truth_level in {"visible_fact", "surface", "minor"} and len(allowed) < 3:
                 allowed.append(AllowedReveal(fact=fact, level="surface", source=clue.id))
             elif len(suspected) < 5:
                 suspected.append(SuspectedOnly(fact=fact, reason=f"线索 {clue.id} 本章只能形成怀疑，不能确认真相。"))
@@ -35,6 +42,10 @@ class RevealBudgetService:
             forbidden.append(ForbiddenReveal(fact=hidden_truth, until_chapter=max(chapter_no + 3, 4)))
         for fact in getattr(bible, "forbidden_early_reveals", []) or []:
             forbidden.append(ForbiddenReveal(fact=str(fact), until_chapter=max(chapter_no + 2, 3)))
+        for fact in chapter_function.get("must_not_reveal") or []:
+            forbidden.append(ForbiddenReveal(fact=str(fact), until_chapter=target_chapters))
+        for thread_id in chapter_function.get("thread_payoffs") or []:
+            payoff_targets.append(PayoffTarget(thread_id=str(thread_id), expected_payoff_chapter=chapter_no))
 
         if not questions:
             questions.append(getattr(bible, "main_question", "本章异常真正指向什么？") or "本章异常真正指向什么？")

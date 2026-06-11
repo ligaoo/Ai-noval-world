@@ -1,0 +1,82 @@
+{
+  "clues": [
+    {
+      "id": "clue_wrong_doorplate",
+      "clue_id": "clue_wrong_doorplate",
+      "name": "醒来后的错误门牌",
+      "content": "顾行舟梦里的401门牌在醒来后出现在自家走廊尽头，说明梦中细节正在复写现实。",
+      "level": "minor",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_night_door_case",
+      "allowed_stages": ["setup", "investigation"],
+      "importance": 90,
+      "discover_routes": [
+        {"route_id": "route_inspect_wrong_doorplate", "action_type": "inspect", "target": "wrong_doorplate_401", "location_id": "apartment_corridor", "required_skill": "observation", "difficulty": 20, "result": "顾行舟确认门牌401和昨晚梦里看到的编号一致，但墙后没有门洞。", "result_text": "顾行舟确认门牌401和昨晚梦里看到的编号一致，但墙后没有门洞。"},
+        {"route_id": "route_compare_monitor_record", "action_type": "inspect", "target": "half_monitor_record", "location_id": "apartment_corridor", "required_skill": "logic", "difficulty": 30, "result": "半页监护记录背面出现了同样的401编号，墨迹像被水泡开。", "result_text": "半页监护记录背面出现了同样的401编号，墨迹像被水泡开。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 10, "progress": 10, "conflict": 2}}
+    },
+    {
+      "id": "clue_three_knocks",
+      "clue_id": "clue_three_knocks",
+      "name": "三次敲门声",
+      "content": "夜门点名前，接触者会在醒来后听到三次间隔完全相同的敲门声，录音会自动变短。",
+      "level": "minor",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_night_door_case",
+      "allowed_stages": ["setup", "investigation"],
+      "importance": 78,
+      "discover_routes": [
+        {"route_id": "route_play_door_audio", "action_type": "inspect", "target": "door_audio_on_phone", "location_id": "apartment_corridor", "required_skill": "observation", "difficulty": 25, "result": "手机里的敲门录音只剩两次半，第三次像被人从尾部剪掉。", "result_text": "手机里的敲门录音只剩两次半，第三次像被人从尾部剪掉。"},
+        {"route_id": "route_ask_lin_knocks", "action_type": "ask", "target": "char_lin_shuye", "location_id": "closed_sleep_clinic", "required_skill": "social", "difficulty": 35, "result": "林述夜承认三次敲门意味着夜门已经开始确认现实位置。", "result_text": "林述夜承认三次敲门意味着夜门已经开始确认现实位置。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 8, "progress": 8, "conflict": 3}}
+    },
+    {
+      "id": "clue_sleep_tally_cost",
+      "clue_id": "clue_sleep_tally_cost",
+      "name": "睡眠账本的代价",
+      "content": "睡眠账本可以记录并延迟一个人的入睡风险，但记录者会失去一段自己的清醒时间。",
+      "level": "medium",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_sleep_tally",
+      "allowed_stages": ["investigation", "confrontation"],
+      "importance": 82,
+      "discover_routes": [
+        {"route_id": "route_inspect_tally_copy", "action_type": "inspect", "target": "sleep_tally_copy", "location_id": "closed_sleep_clinic", "required_skill": "observation", "difficulty": 35, "result": "复写页上每个名字后都有一段被划掉的清醒时间，林述夜拒绝解释第四行。", "result_text": "复写页上每个名字后都有一段被划掉的清醒时间，林述夜拒绝解释第四行。"},
+        {"route_id": "route_ask_meng_tally", "action_type": "ask", "target": "char_meng_qiao", "location_id": "sleep_control_archive", "required_skill": "social", "difficulty": 45, "result": "孟乔只承认眠管所曾经用账本延迟夜门，但不承认它能救人。", "result_text": "孟乔只承认眠管所曾经用账本延迟夜门，但不承认它能救人。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 8, "progress": 7, "conflict": 7}}
+    },
+    {
+      "id": "clue_wrong_rules",
+      "clue_id": "clue_wrong_rules",
+      "name": "互相矛盾的守夜规则",
+      "content": "诊所墙上的守夜规则彼此矛盾，说明幸存者掌握的规则可能被梦境故意污染。",
+      "level": "medium",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_false_rules",
+      "allowed_stages": ["setup", "investigation"],
+      "importance": 75,
+      "discover_routes": [
+        {"route_id": "route_inspect_wall_rules", "action_type": "inspect", "target": "clinic_wall_rules", "location_id": "closed_sleep_clinic", "required_skill": "logic", "difficulty": 30, "result": "顾行舟发现第一条规则要求不要叫醒梦游者，第三条却要求必须在七秒内叫醒。", "result_text": "顾行舟发现第一条规则要求不要叫醒梦游者，第三条却要求必须在七秒内叫醒。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 8, "progress": 6, "conflict": 5}}
+    },
+    {
+      "id": "clue_fourth_floor_bus",
+      "clue_id": "clue_fourth_floor_bus",
+      "name": "开往四楼的末班车",
+      "content": "末班车站的报站屏显示目的地为不存在的四楼，但第一章只能作为下一步钩子，不能进入住院楼。",
+      "level": "major",
+      "truth_level": "hidden_fact",
+      "arc_id": "arc_abandoned_ward",
+      "allowed_stages": ["investigation", "confrontation"],
+      "importance": 88,
+      "discover_routes": [
+        {"route_id": "route_observe_bus_display", "action_type": "observe", "target": "wrong_bus_display", "location_id": "night_bus_stop", "required_skill": "observation", "difficulty": 35, "result": "报站屏显示末班车目的地是‘四楼’，但车道上没有任何车辆。", "result_text": "报站屏显示末班车目的地是‘四楼’，但车道上没有任何车辆。"}
+      ],
+      "on_discovered": {"add_known_fact_to": "discoverer", "plot_value": {"mystery": 10, "progress": 6, "danger": 5}}
+    }
+  ]
+}

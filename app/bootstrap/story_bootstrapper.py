@@ -59,11 +59,11 @@ class StoryBootstrapper:
         parsed = self.seed_interpreter.interpret(seed.user_seed)
         bible = self.world_bible_gen.generate(parsed, world_id)
         cast = self.cast_gen.generate(parsed)
-        map_locs = self.map_gen.generate(parsed)
-        truth = self.truth_gen.generate(parsed)
-        evidence = self.evidence_gen.generate(parsed)
-        clues = self.clue_gen.generate(parsed)
-        threads = self.thread_gen.generate(parsed)
+        map_locs = self.map_gen.generate(parsed, target_chapters=seed.target_chapters)
+        truth = self.truth_gen.generate(parsed, target_chapters=seed.target_chapters)
+        evidence = self.evidence_gen.generate(parsed, target_chapters=seed.target_chapters)
+        clues = self.clue_gen.generate(parsed, target_chapters=seed.target_chapters)
+        threads = self.thread_gen.generate(parsed, target_chapters=seed.target_chapters)
         protagonist_name = next((c.name for c in cast if c.role == "protagonist"), "主角")
         opening = self.opening_gen.generate(parsed, protagonist_name=protagonist_name)
         self._ensure_opening_selected_clues(opening, clues)
@@ -79,10 +79,14 @@ class StoryBootstrapper:
             world_id=world_id,
             status="candidate_generated",
             title=bible.get("title", world_id),
+            target_words=seed.target_words,
+            target_chapters=seed.target_chapters,
             world_bible=bible,
             characters=cast,
             map=map_locs,
             clues=clues,
+            plot_arcs=self._build_plot_arcs(parsed, truth),
+            character_arcs=self._build_character_arcs(cast),
             truth_chain=truth,
             evidence_graph=evidence,
             open_threads=threads,
@@ -125,6 +129,76 @@ class StoryBootstrapper:
             "target_progress": 100,
             "tick_limit": 30,
             "no_progress_limit": 4,
+        }
+
+    def _build_plot_arcs(self, parsed, truth) -> List[Dict[str, Any]]:
+        return [
+            {
+                "arc_id": "arc_main_supernatural_mystery",
+                "name": "主异常真相线",
+                "status": "active",
+                "theme": parsed.core_motif or parsed.supernatural_element or "异常规则",
+                "stages": [
+                    {"stage_id": step.stage, "chapter_range": step.chapter_range, "required_events": step.allowed_information, "forbidden_revelations": step.forbidden_information}
+                    for step in (truth.reveal_steps if truth else [])
+                ],
+            }
+        ]
+
+    def _build_character_arcs(self, cast: List[CharacterWithAgent]) -> List[Dict[str, Any]]:
+        arcs: List[Dict[str, Any]] = []
+        for character in [c for c in cast if c.active_agent][:4]:
+            arcs.append({
+                "character_id": character.character_id,
+                "starting_state": character.background or character.personal_stakes or "被卷入异常后仍试图用旧经验解释处境",
+                "wound": character.personal_stakes or "错误选择会带来不可逆代价",
+                "false_belief": "只要掌握足够信息就能控制局面",
+                "desire": character.goal or "完成当前目标",
+                "need": "理解规则背后的代价，并为自己的选择负责",
+                "current_stage": "avoidance",
+                "completed_stages": [],
+                "progress": 0,
+                "stages": [
+                    {"stage_id": "avoidance", "name": "回避阶段", "description": "倾向用旧经验解释异常", "required_belief_changes": ["当前处境无法只靠旧经验解释"]},
+                    {"stage_id": "doubt", "name": "怀疑阶段", "description": "开始怀疑规则和同伴信息", "required_belief_changes": ["必须重新审视已有线索"]},
+                    {"stage_id": "confrontation", "name": "面对阶段", "description": "被迫面对推进真相的代价", "required_belief_changes": ["继续推进意味着承担个人代价"]},
+                    {"stage_id": "acceptance", "name": "选择阶段", "description": "主动选择承担或转移代价", "required_belief_changes": ["必须主动选择而不是被处境推着走"]},
+                ],
+            })
+        return arcs
+
+    def _build_quality_policy(self, result: BootstrapResult) -> Dict[str, Any]:
+        whitelist = sorted({
+            "线索", "记录", "痕迹", "门", "门牌", "脚印", "录音", "档案", "规则", "名单",
+            *(obj.object_id for loc in result.map for obj in loc.objects),
+            *(clue.title for clue in result.clues),
+        })
+        return {
+            "quality_threshold": 78,
+            "style_focus": ["规则灵异清晰", "信息递进", "角色代价", "长篇伏笔", "克制文风"],
+            "v11_constraints": {
+                "clue_budget": {
+                    "chapter_1_max_clues": 3,
+                    "default_max_clues_per_chapter": 4,
+                    "max_must_include_clues": 2,
+                },
+                "opening_chapter": {
+                    "require_character_beat": True,
+                    "require_subtle_anomaly_hook": True,
+                    "forbid_full_rule_explanation": True,
+                    "forbid_final_truth": True,
+                },
+                "reveal_policy": {
+                    "forbid_final_truth_before_ratio": 0.82,
+                    "forbid_full_rule_explanation_before_ratio": 0.65,
+                },
+            },
+            "chapter_one_policy": {
+                "target_length": "6000-7500 Chinese characters",
+                "must_discover_clues": [clue.clue_id for clue in result.clues[:3]],
+                "ending_boundary": "停在具体异常钩子，不进入最终真相地点。",
+            },
+            "faithfulness_whitelist_keywords": whitelist,
         }
 
     # ============================================================
@@ -212,6 +286,10 @@ class StoryBootstrapper:
                     "information_gap": f"{loc.name}保留了需要通过行动验证的信息差。",
                     "suitable_conflicts": ["观察误判", "线索解释分歧"],
                     "forbidden_events": ["直接揭示最终真相"],
+                    "reveal_stage": loc.reveal_stage,
+                    "recommended_chapter_range": loc.recommended_chapter_range,
+                    "unlock_condition": loc.unlock_condition,
+                    "associated_threads": loc.associated_threads,
                 }
                 for loc in result.map
             ]
@@ -254,6 +332,10 @@ class StoryBootstrapper:
                     "bootstrap_inventory": c.on_discovered.add_inventory_item,
                     "bootstrap_event": c.on_discovered.trigger_event,
                     "related_thread": c.related_thread,
+                    "planned_chapters": c.planned_chapters,
+                    "evidence_ids": c.evidence_ids,
+                    "related_truth": c.related_truth,
+                    "reveal_role": c.reveal_role,
                 }
                 for c in result.clues
             ]
@@ -285,6 +367,15 @@ class StoryBootstrapper:
             with open(world_dir / "opening_chapter_plan.json", "w", encoding="utf-8") as f:
                 json.dump(result.opening_chapter_plan.model_dump(), f, ensure_ascii=False, indent=2)
 
+        with open(world_dir / "quality_policy.json", "w", encoding="utf-8") as f:
+            json.dump(self._build_quality_policy(result), f, ensure_ascii=False, indent=2)
+
+        with open(world_dir / "plot_arcs.json", "w", encoding="utf-8") as f:
+            json.dump({"arcs": result.plot_arcs}, f, ensure_ascii=False, indent=2)
+
+        with open(world_dir / "character_arcs.json", "w", encoding="utf-8") as f:
+            json.dump({"characters": result.character_arcs}, f, ensure_ascii=False, indent=2)
+
         with open(world_dir / "bootstrap_result.json", "w", encoding="utf-8") as f:
             json.dump(result.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
 
@@ -297,6 +388,15 @@ class StoryBootstrapper:
                 "title": result.title,
                 "created_at": result.created_at,
                 "summary": result.summary_dict(),
+                "target_words": result.target_words,
+                "target_chapters": result.target_chapters,
+                "artifact_counts": {
+                    "plot_arcs": len(result.plot_arcs),
+                    "character_arcs": len(result.character_arcs),
+                    "evidence": len(result.evidence_graph),
+                    "clues": len(result.clues),
+                    "open_threads": len(result.open_threads),
+                },
                 "parsed_seed": result.parsed_seed.model_dump() if result.parsed_seed else None,
                 "validation": result.validation.model_dump() if result.validation else None,
                 "fusion_report": result.fusion_report,

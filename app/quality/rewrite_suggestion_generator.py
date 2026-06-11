@@ -278,6 +278,30 @@ class RewriteSuggestionGenerator:
             "message_template": "删除 AI 式总结或预告句，改用具体细节自然收束段落。",
             "constraints": ["不能删除关键事件", "用动作或物象代替总结判断"],
         },
+        "weak_protagonist_agency": {
+            "type": "deepen_character",
+            "rewrite_task": "deepen_character",
+            "message_template": "强化主角围绕本章目标的主动行动，让已有观察或询问转化为判断、试探或选择。",
+            "constraints": ["不能新增事件", "只能强化已有行动的目标、风险和反应"],
+        },
+        "information_without_action": {
+            "type": "reduce_exposition",
+            "rewrite_task": "reduce_exposition",
+            "message_template": "把解释性信息改写为角色行动、反应、判断变化或局势变化，避免只展示设定。",
+            "constraints": ["不能删除关键信息", "不能新增未授权线索或物件"],
+        },
+        "missing_choice_consequence": {
+            "type": "increase_conflict",
+            "rewrite_task": "increase_conflict",
+            "message_template": "突出已有行动中的选择压力和后果，让章节结束时局面发生可见变化。",
+            "constraints": ["不能改变事件结果", "不能新增冲突事件"],
+        },
+        "abstract_or_soft_hook": {
+            "type": "improve_hook",
+            "rewrite_task": "improve_hook",
+            "message_template": "将抽象章尾改为具体物件、动作、感官变化、身份状态变化或可见威胁。",
+            "constraints": ["不能提前揭示真相", "只能使用已有事件和授权实体"],
+        },
     }
 
     def generate_suggestions(
@@ -337,7 +361,7 @@ class RewriteSuggestionGenerator:
         else:
             problem_type = problem.type
 
-            if problem_type in {"weak_hook", "payoff_too_abrupt"}:
+            if problem_type in {"weak_hook", "payoff_too_abrupt", "abstract_or_soft_hook"}:
                 last_section = f"sec_{paragraph_count:03d}"
                 second_last = f"sec_{paragraph_count - 1:03d}"
                 target_sections = [second_last, last_section]
